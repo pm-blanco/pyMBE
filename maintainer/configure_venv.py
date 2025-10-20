@@ -19,7 +19,6 @@
 
 import os
 import sys
-import stat
 import enum
 import argparse
 import sysconfig
@@ -84,67 +83,3 @@ virtual_env_family = detect_py_virtual_environment()
 if not espressomd_found:
     make_pth("espresso", os.path.join(args.espresso_path, "src", "python"))
 make_pth("pymbe", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-def make_venv_set_omp(name, value):
-    return f"""
-_OLD_VIRTUAL_{name}="${name}"
-if test -z "${name}"; then
-  export {name}={value}
-fi"""
-
-
-def make_venv_unset_env(name):
-    return f"""    if [ -n "${{_OLD_VIRTUAL_{name}:-}}" ] ; then
-        {name}="${{_OLD_VIRTUAL_{name}:-}}"
-        export {name}
-        unset _OLD_VIRTUAL_{name}
-    fi"""
-
-
-if virtual_env_family == PyVirtualEnv.venv:
-    venv_activate = os.path.join(os.environ.get("VIRTUAL_ENV"), "bin", "activate")
-    if os.path.isfile(venv_activate):
-        original_access_mode = os.stat(venv_activate).st_mode
-        os.chmod(venv_activate, original_access_mode | stat.S_IWUSR)
-        try:
-            with open(venv_activate, "r+") as f:
-                content = f.read()
-                token = "\nexport PATH"
-                assert token in content
-                content = content.replace(token, f"{token}\n{make_venv_set_omp('OMP_PROC_BIND', 'false')}\n{make_venv_set_omp('OMP_NUM_THREADS', '1')}")
-                token = "unset _OLD_VIRTUAL_PATH\n    fi"
-                assert token in content
-                content = content.replace(token, f"{token}\n{make_venv_unset_env('OMP_PROC_BIND')}\n{make_venv_unset_env('OMP_NUM_THREADS')}""")
-                f.seek(0)
-                f.truncate()
-                f.write(content)
-        except:
-            raise
-        finally:
-            os.chmod(venv_activate, original_access_mode)
-
-elif virtual_env_family == PyVirtualEnv.conda:
-    try:
-        import conda.cli.main_env_vars
-    except ImportError as err:
-        raise RuntimeError('Cannot set up environment variables in this conda environment; consider executing `conda install conda`') from err
-    import contextlib
-    import argparse
-    import io
-    parser = argparse.ArgumentParser()
-    args = argparse.Namespace(json=False)
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        conda.cli.main_env_vars.execute_list(args, parser)
-    env = {}
-    for line in buf.getvalue().split("\n"):
-        if line.strip() not in ["0", ""]:
-            key, value = line.split("=", 1)
-            env[key.strip()] = value.strip()
-    args.vars = []
-    if "OMP_PROC_BIND" not in env:
-        args.vars.append("OMP_PROC_BIND = false")
-    if "OMP_NUM_THREADS" not in env:
-        args.vars.append("OMP_NUM_THREADS = 1")
-    conda.cli.main_env_vars.execute_set(args, parser)

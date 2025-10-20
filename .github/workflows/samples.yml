@@ -21,7 +21,7 @@ jobs:
           - version: "4.2.2"
             eessi: ESPResSo/4.2.2-foss-2023a
           - version: "5.0-dev"
-            eessi: ESPResSo/8aa60cecd56cdd10ab62042c567552f347374f36-foss-2023b
+            eessi: ESPResSo/dc87ede3f6c218bb71624460752bc8c26a271c33-foss-2023b
     name: ubuntu - ESPResSo ${{ matrix.espresso.version }}
     steps:
       - name: Setup EESSI
@@ -37,7 +37,9 @@ jobs:
             ${{ matrix.espresso.eessi }}
       - name: Run testsuite
         run: |
+          export NUM_PROC=$(nproc)
+          export OMP_PROC_BIND=false OMP_NUM_THREADS=1
           module restore pymbe
           source venv/bin/activate
-          make functional_tests -j4
+          make functional_tests -j${NUM_PROC}
         shell: bash

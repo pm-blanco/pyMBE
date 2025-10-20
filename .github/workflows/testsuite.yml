@@ -21,7 +21,7 @@ jobs:
             eessi: ESPResSo/4.2.2-foss-2023a
             upload_artifact: true
           - version: "5.0-dev"
-            eessi: ESPResSo/8aa60cecd56cdd10ab62042c567552f347374f36-foss-2023b
+            eessi: ESPResSo/dc87ede3f6c218bb71624460752bc8c26a271c33-foss-2023b
             upload_artifact: false
     name: ubuntu - ESPResSo ${{ matrix.espresso.version }}
     steps:
@@ -46,10 +46,12 @@ jobs:
             coverage==7.4.4
       - name: Run testsuite
         run: |
+          export NUM_PROC=$(nproc)
+          export OMP_PROC_BIND=false OMP_NUM_THREADS=1
           module restore pymbe
           source venv/bin/activate
           make pylint
-          make unit_tests -j4 COVERAGE=1
+          make unit_tests -j${NUM_PROC} COVERAGE=1
           make docs
           make coverage_xml
         shell: bash
