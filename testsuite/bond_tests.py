@@ -91,7 +91,7 @@ class Test(ut.TestCase):
         # check bond deserialization
         bond_params =  bond_object.get_params()
         bond_params["bond_id"] = bond_object._bond_id
-        deserialized = pmb.convert_str_to_bond_object(
+        deserialized = df_management._DFManagement._convert_str_to_bond_object(
             f'{bond_object.__class__.__name__}({json.dumps(bond_params)})')
         self.check_bond_setup(bond_object=deserialized,
                               input_parameters=bond,
@@ -130,7 +130,7 @@ class Test(ut.TestCase):
         # check bond deserialization
         bond_params =  bond_object.get_params()
         bond_params["bond_id"] = bond_object._bond_id
-        deserialized = pmb.convert_str_to_bond_object(
+        deserialized = df_management._DFManagement._convert_str_to_bond_object(
             f'{bond_object.__class__.__name__}({json.dumps(bond_params)})')
         self.check_bond_setup(bond_object=deserialized,
                               input_parameters=bond,
@@ -278,11 +278,11 @@ class Test(ut.TestCase):
 
         # check deserialization exceptions
         with self.assertRaises(ValueError):
-            pmb.convert_str_to_bond_object('Not_A_Bond()')
+            df_management._DFManagement._convert_str_to_bond_object('Not_A_Bond()')
         with self.assertRaises(json.decoder.JSONDecodeError):
-            pmb.convert_str_to_bond_object('HarmonicBond({invalid_json})')
+            df_management._DFManagement._convert_str_to_bond_object('HarmonicBond({invalid_json})')
         with self.assertRaises(NotImplementedError):
-            pmb.convert_str_to_bond_object('QuarticBond({"r_0": 1., "k": 1.})')
+            df_management._DFManagement._convert_str_to_bond_object('QuarticBond({"r_0": 1., "k": 1.})')
 
         # check bond keys
         self.assertEqual(pmb.find_bond_key('A', 'A'), 'A-A')

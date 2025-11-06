@@ -670,65 +670,8 @@ class pymbe_library():
         self.df.fillna(pd.NA, inplace=True)
         return
 
-    def convert_columns_to_original_format (self, df):
-        """
-        Converts the columns of the Dataframe to the original format in pyMBE.
         
-        Args:
-            df(`DataFrame`): dataframe with pyMBE information as a string  
-        
-        """
-
-        columns_dtype_int = ['particle_id','particle_id2', 'residue_id','molecule_id', ('state_one','es_type'),('state_two','es_type'),('state_one','z'),('state_two','z') ]  
-
-        columns_with_units = ['sigma', 'epsilon', 'cutoff', 'offset']
-
-        columns_with_list_or_dict = ['residue_list','side_chains', 'parameters_of_the_potential','sequence', 'chain_map', 'node_map']
-
-        for column_name in columns_dtype_int:
-            df[column_name] = df[column_name].astype(pd.Int64Dtype())
-            
-        for column_name in columns_with_list_or_dict:
-            if df[column_name].isnull().all():
-                df[column_name] = df[column_name].astype(object)
-            else:
-                df[column_name] = df[column_name].apply(lambda x: json.loads(x) if pd.notnull(x) else x)
-
-        for column_name in columns_with_units:
-            df[column_name] = df[column_name].apply(lambda x: self.create_variable_with_units(x) if pd.notnull(x) else x)
-
-        df['bond_object'] = df['bond_object'].apply(lambda x: self.convert_str_to_bond_object(x) if pd.notnull(x) else x)
-        df["l0"] = df["l0"].astype(object)
-        df["pka"] = df["pka"].astype(object)
-        return df
     
-    def convert_str_to_bond_object (self, bond_str):
-        """
-        Convert a row read as a `str` to the corresponding ESPResSo bond object. 
-
-        Args:
-            bond_str(`str`): string with the information of a bond object.
-
-        Returns:
-            bond_object(`obj`): ESPResSo bond object.
-
-        Note:
-            Current supported bonds are: HarmonicBond and FeneBond
-        """
-        import espressomd.interactions
-
-        supported_bonds = ['HarmonicBond', 'FeneBond']
-        m = re.search(r'^([A-Za-z0-9_]+)\((\{.+\})\)$', bond_str)
-        if m is None:
-            raise ValueError(f'Cannot parse bond "{bond_str}"')
-        bond = m.group(1)
-        if bond not in supported_bonds:
-            raise NotImplementedError(f"Bond type '{bond}' currently not implemented in pyMBE, accepted types are {supported_bonds}")
-        params = json.loads(m.group(2))
-        bond_id = params.pop("bond_id")
-        bond_object = getattr(espressomd.interactions, bond)(**params)
-        bond_object._bond_id = bond_id
-        return bond_object
 
     def copy_df_entry(self, name, column_name, number_of_copies):
         '''
@@ -1489,23 +1432,7 @@ class pymbe_library():
             residues_info[residue_id]['side_chain_ids']=side_chain_beads_ids
         return  residues_info
 
-    def create_variable_with_units(self, variable):
-        """
-        Returns a pint object with the value and units defined in `variable`.
-
-        Args:
-            variable(`dict` or `str`): {'value': value, 'units': units}
-        Returns:
-            variable_with_units(`obj`): variable with units using the pyMBE UnitRegistry.
-        """        
-        if isinstance(variable, dict):
-            value=variable.pop('value')
-            units=variable.pop('units')
-        elif isinstance(variable, str):
-            value = float(re.split(r'\s+', variable)[0])
-            units = re.split(r'\s+', variable)[1]
-        variable_with_units=value*self.units(units)
-        return variable_with_units 
+    
 
     def define_AA_residues(self, sequence, model):
         """
@@ -2519,7 +2446,8 @@ class pymbe_library():
                 for not_required_key in without_units+with_units:
                     if not_required_key in param_dict.keys():
                         if not_required_key in with_units:
-                            not_required_attributes[not_required_key]=self.create_variable_with_units(variable=param_dict.pop(not_required_key))
+                            not_required_attributes[not_required_key] = df_management._DFManagement._create_variable_with_units(variable=param_dict.pop(not_required_key), 
+                                                                                                                                units_registry=self.units)
                         elif not_required_key in without_units:
                             not_required_attributes[not_required_key]=param_dict.pop(not_required_key)
                     else:
@@ -2542,16 +2470,21 @@ class pymbe_library():
                 bond_parameters = param_dict.pop('bond_parameters')
                 bond_type = param_dict.pop('bond_type')
                 if bond_type == 'harmonic':
-                    k = self.create_variable_with_units(variable=bond_parameters.pop('k'))
-                    r_0 = self.create_variable_with_units(variable=bond_parameters.pop('r_0'))
+                    k =  df_management._DFManagement._create_variable_with_units(variable=bond_parameters.pop('k'), 
+                                                                                 units_registry=self.units)
+                    r_0 = df_management._DFManagement._create_variable_with_units(variable=bond_parameters.pop('r_0'), 
+                                                                                  units_registry=self.units)
                     bond = {'r_0'    : r_0,
                             'k'      : k,
                             }
 
                 elif bond_type == 'FENE':
-                    k = self.create_variable_with_units(variable=bond_parameters.pop('k'))
-                    r_0 = self.create_variable_with_units(variable=bond_parameters.pop('r_0'))
-                    d_r_max = self.create_variable_with_units(variable=bond_parameters.pop('d_r_max'))
+                    k = df_management._DFManagement._create_variable_with_units(variable=bond_parameters.pop('k'), 
+                                                                                 units_registry=self.units)
+                    r_0 = df_management._DFManagement._create_variable_with_units(variable=bond_parameters.pop('r_0'), 
+                                                                                  units_registry=self.units)
+                    d_r_max = df_management._DFManagement._create_variable_with_units(variable=bond_parameters.pop('d_r_max'), 
+                                                                                      units_registry=self.units)
                     bond =  {'r_0'    : r_0,
                              'k'      : k,
                              'd_r_max': d_r_max,
@@ -2704,18 +2637,16 @@ class pymbe_library():
         Note:
             This function only accepts files with CSV format. 
         """
-        
         if filename.rsplit(".", 1)[1] != "csv":
             raise ValueError("Only files with CSV format are supported")
         df = pd.read_csv (filename,header=[0, 1], index_col=0)
         self.df = df_management._DFManagement._setup_df()
         columns_names = pd.MultiIndex.from_frame(self.df)
         columns_names = columns_names.names
-                
         multi_index = pd.MultiIndex.from_tuples(columns_names)
         df.columns = multi_index
-        
-        self.df = self.convert_columns_to_original_format(df)
+        self.df = df_management._DFManagement._convert_columns_to_original_format(df=df, 
+                                                                                  units_registry=self.units)
         self.df.fillna(pd.NA, inplace=True)
         return self.df
     
