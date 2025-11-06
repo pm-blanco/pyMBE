@@ -20,6 +20,7 @@
 import numpy as np
 import pandas as pd
 import pyMBE
+import pyMBE.storage.df_management as df_management
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -71,7 +72,7 @@ def check_acid_base_setup(input_parameters, acidity_setup):
 print("*** Particle acidity unit tests ***")
 print("*** Unit test: check that all acid/base input parameters in define_particle for an inert particle are correctly stored in pmb.df***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"I", 
                   "acidity": pd.NA,
                   "pka": pd.NA,
@@ -87,7 +88,7 @@ check_acid_base_setup(input_parameters=input_parameters,
 print("*** Unit test passed ***")
 print("*** Unit test: check that a deprecation warning is raised if the keyword 'inert' is used for acidity ***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"I", 
                   "acidity": "inert",
                   "pka": pd.NA,
@@ -96,7 +97,7 @@ pmb.define_particle(**input_parameters)
 print("*** Unit test passed ***")
 print("*** Unit test: check that all acid/base input parameters in define_particle for an acid are correctly stored in pmb.df***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"A", 
                   "acidity": "acidic",
                   "pka":4}
@@ -110,7 +111,7 @@ check_acid_base_setup(input_parameters=input_parameters,
 print("*** Unit test passed ***")
 print("*** Unit test: check that all acid/base input parameters in define_particle for a base are correctly stored in pmb.df***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"B", 
                   "acidity": "basic",
                   "pka":9}

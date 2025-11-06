@@ -19,6 +19,7 @@
 # Import pyMBE and other libraries
 import pyMBE
 import numpy as np
+import pyMBE.storage.df_management as df_management
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -49,7 +50,7 @@ def check_charge_number_map(input_parameters):
 print("*** get_charge_number_map unit tests ***")
 print("*** Unit test: check that get_charge_number_map works correctly for inert particles***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"I", 
                   "acidity": "inert",
                   "pka": np.nan,
@@ -60,7 +61,7 @@ check_charge_number_map(input_parameters)
 print("*** Unit test passed ***")
 print("*** Unit test: check that get_charge_number_map works correctly for acidic particles***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"A", 
                   "acidity": "acidic",
                   "pka":4}
@@ -70,7 +71,7 @@ check_charge_number_map(input_parameters)
 print("*** Unit test passed ***")
 print("*** Unit test: check that get_charge_number_map works correctly for basic particles***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 input_parameters={"name":"B", 
                   "acidity": "basic",
                   "pka":4}

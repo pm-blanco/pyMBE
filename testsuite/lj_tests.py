@@ -18,8 +18,8 @@
 
 # Import pyMBE and other libraries
 import pyMBE
+import pyMBE.storage.df_management as df_management
 import numpy as np
-
 import logging
 import io
 # Create an in-memory log stream
@@ -48,7 +48,7 @@ for parameter_key in input_parameters.keys():
 print("*** Unit test passed ***")
 print("*** Unit test: check that `offset` defaults to 0***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define dummy particle
 pmb.define_particle(name="A")
 
@@ -59,7 +59,7 @@ print("*** Unit test passed ***")
 
 print("*** Unit test: check that `cutoff` defaults to `2**(1./6.) reduced_length` ***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define dummy particle
 pmb.define_particle(name="A")
 
@@ -95,7 +95,7 @@ print("*** Unit test passed ***")
 print("*** Unit test: test that setup_lj_interactions sets up inert particles correctly ***")
 
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define particles
 A_input_parameters={"name":"A", 
                     "sigma":1*pmb.units.nm, 

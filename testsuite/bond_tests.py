@@ -24,7 +24,7 @@ import json.decoder
 import json
 import io
 import logging
-
+import pyMBE.storage.df_management as df_management
 
 # Create an in-memory log stream
 log_stream = io.StringIO()
@@ -38,7 +38,7 @@ pmb = pyMBE.pymbe_library(seed=42)
 class Test(ut.TestCase):
 
     def setUp(self):
-        pmb.setup_df()
+        pmb.df = df_management._DFManagement._setup_df()
 
     def check_bond_setup(self, bond_object, input_parameters, bond_type):
         """

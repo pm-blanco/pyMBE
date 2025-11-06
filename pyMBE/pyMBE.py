@@ -25,6 +25,7 @@ import scipy.constants
 import scipy.optimize
 import logging
 import importlib.resources
+import pyMBE.storage.df_management as df_management
 
 class pymbe_library():
     """
@@ -79,7 +80,8 @@ class pymbe_library():
                                unit_charge=unit_charge,
                                temperature=temperature, 
                                Kw=Kw)
-        self.setup_df()
+        
+        self.df = df_management._DFManagement._setup_df()
         self.lattice_builder = None
         self.root = importlib.resources.files(__package__)
         return
@@ -2706,8 +2708,10 @@ class pymbe_library():
         if filename.rsplit(".", 1)[1] != "csv":
             raise ValueError("Only files with CSV format are supported")
         df = pd.read_csv (filename,header=[0, 1], index_col=0)
-        columns_names = self.setup_df()
-        
+        self.df = df_management._DFManagement._setup_df()
+        columns_names = pd.MultiIndex.from_frame(self.df)
+        columns_names = columns_names.names
+                
         multi_index = pd.MultiIndex.from_tuples(columns_names)
         df.columns = multi_index
         
@@ -3417,79 +3421,6 @@ class pymbe_library():
 
             sucessful_reactions_labels.append(name)
         return RE, sucessful_reactions_labels, ionic_strength_res
-
-    def setup_df (self):
-        """
-        Sets up the pyMBE's dataframe `pymbe.df`.
-
-        Returns:
-            columns_names(`obj`): pandas multiindex object with the column names of the pyMBE's dataframe
-        """
-        
-        columns_dtypes = {
-            'name': {
-                '': str},
-            'pmb_type': {
-                '': str},
-            'particle_id': {
-                '': pd.Int64Dtype()},
-            'particle_id2':  {
-                '': pd.Int64Dtype()},
-            'residue_id':  {
-                '': pd.Int64Dtype()},
-            'molecule_id':  {
-                '': pd.Int64Dtype()},
-            'acidity':  {
-                '': str},
-            'pka':  {
-                '': object},
-            'central_bead':  {
-                '': object},
-            'side_chains': {
-                '': object},
-            'residue_list': {
-                '': object},
-            'model': {
-                '': str},
-            'sigma': {
-                '': object},
-            'cutoff': {
-                '': object},
-            'offset': {
-                '': object},
-            'epsilon': {
-                '': object},
-            'state_one': {
-                'label': str,
-                'es_type': pd.Int64Dtype(),
-                'z': pd.Int64Dtype()},
-            'state_two': {
-                'label': str,
-                'es_type': pd.Int64Dtype(),
-                'z': pd.Int64Dtype()},
-            'sequence': {
-                '': object},
-            'bond_object': {
-                '': object},
-            'parameters_of_the_potential':{
-                '': object},
-            'l0': {
-                '': float},
-            'node_map':{
-                '':object},
-            'chain_map':{
-                '':object}}
-        
-        self.df = pd.DataFrame(columns=pd.MultiIndex.from_tuples([(col_main, col_sub) for col_main, sub_cols in columns_dtypes.items() for col_sub in sub_cols.keys()]))
-        
-        for level1, sub_dtypes in columns_dtypes.items():
-            for level2, dtype in sub_dtypes.items():
-                self.df[level1, level2] = self.df[level1, level2].astype(dtype)
-                
-        columns_names = pd.MultiIndex.from_frame(self.df)
-        columns_names = columns_names.names
-                
-        return columns_names
 
     def setup_lj_interactions(self, espresso_system, shift_potential=True, combining_rule='Lorentz-Berthelot'):
         """

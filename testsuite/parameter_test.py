@@ -20,6 +20,7 @@ import pathlib
 import pyMBE
 import pandas as pd
 import numpy as np
+import pyMBE.storage.df_management as df_management
 
 pmb = pyMBE.pymbe_library(seed=42)
 
@@ -41,7 +42,7 @@ path_to_interactions=pmb.root / "parameters" / "peptides" / "Lunkad2021.json"
 path_to_pka=pmb.root / "parameters" / "pka_sets" / "Hass2015.json"
 
 # First order of loading parameters
-pmb.setup_df() # clear the pmb_df
+pmb.df = df_management._DFManagement._setup_df() # clear the pmb_df
 pmb.load_interaction_parameters (filename=peptides_root / "Lunkad2021.json")
 pmb.load_pka_set(filename=pka_root / "Hass2015.json")
 df_1 = pmb.df.copy()
@@ -51,7 +52,7 @@ df_1 = df_1.drop(labels=('state_one', 'es_type'), axis=1).drop(labels=('state_tw
 # Drop bond_object  (assert_frame_equal does not process it well)
 df_1 = df_1.sort_index(axis=1).drop(labels="bond_object", axis=1)
 # Second order of loading parameters
-pmb.setup_df() # clear the pmb_df
+pmb.df = df_management._DFManagement._setup_df() # clear the pmb_df
 pmb.load_pka_set (filename=path_to_pka)
 #print(pmb.df["acidity"])
 pmb.load_interaction_parameters(filename=path_to_interactions) 
@@ -70,7 +71,7 @@ pd.testing.assert_frame_equal(df_1,df_2)
 print("*** Test passed ***")
 
 print("*** Unit test: check that  load_interaction_parameters loads FENE bonds correctly ***")
-pmb.setup_df() # clear the pmb_df
+pmb.df = df_management._DFManagement._setup_df() # clear the pmb_df
 pmb.load_interaction_parameters (filename=data_root / "test_FENE.json")
 
 expected_parameters = {'r_0' : 0.4*pmb.units.nm,
@@ -89,7 +90,7 @@ for key in expected_parameters.keys():
 print("*** Test passed ***")
 print("*** Unit test: check that  load_interaction_parameters loads residue, molecule and peptide objects correctly ***")
 
-pmb.setup_df() # clear the pmb_df
+pmb.df = df_management._DFManagement._setup_df() # clear the pmb_df
 pmb.load_interaction_parameters (filename=data_root / "test_molecules.json")
 
 expected_residue_parameters={"central_bead":  "A", "side_chains": ["B","C"] }
@@ -117,12 +118,12 @@ np.testing.assert_equal(actual=frozenset(pmb.df[pmb.df.name == "P1"].model.value
                 verbose=True)
 print("*** Test passed ***")
 print("*** Unit test: check that  load_interaction_parameters raises a ValueError if one loads a data set with an unknown pmb_type ***")
-pmb.setup_df() # clear the pmb_df
+pmb.df = df_management._DFManagement._setup_df() # clear the pmb_df
 input_parameters={"filename": data_root / "test_non_valid_object.json"}
 np.testing.assert_raises(ValueError, pmb.load_interaction_parameters, **input_parameters)
 print("*** Test passed ***")
 print("*** Unit test: check that  load_interaction_parameters raises a ValueError if one loads a bond not supported by pyMBE ***")
-pmb.setup_df() # clear the pmb_df
+pmb.df = df_management._DFManagement._setup_df() # clear the pmb_df
 input_parameters={"filename": data_root / "test_non_valid_bond.json"}
 np.testing.assert_raises(ValueError, pmb.load_interaction_parameters, **input_parameters)
 print("*** Test passed ***")
