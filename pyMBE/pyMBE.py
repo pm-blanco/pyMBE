@@ -2645,9 +2645,11 @@ class pymbe_library():
         columns_names = columns_names.names
         multi_index = pd.MultiIndex.from_tuples(columns_names)
         df.columns = multi_index
-        self.df = df_management._DFManagement._convert_columns_to_original_format(df=df, 
-                                                                                  units_registry=self.units)
-        self.df.fillna(pd.NA, inplace=True)
+        df_management._DFManagement._convert_columns_to_original_format(df=df, 
+                                                                        units_registry=self.units)
+        self.df = df            
+        self.df.fillna(pd.NA, 
+                       inplace=True)
         return self.df
     
     def read_protein_vtf_in_df (self,filename,unit_length=None):

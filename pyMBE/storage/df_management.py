@@ -57,7 +57,6 @@ class _DFManagement:
         df['bond_object'] = df['bond_object'].apply(lambda x: cls._convert_str_to_bond_object(x) if pd.notnull(x) else x)
         df["l0"] = df["l0"].astype(object)
         df["pka"] = df["pka"].astype(object)
-        return df
 
     @staticmethod
     def _convert_str_to_bond_object(bond_str):
