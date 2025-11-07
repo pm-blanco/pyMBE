@@ -22,6 +22,7 @@ import pandas as pd
 import numpy as np
 import logging
 import io
+import pyMBE.storage.df_management as df_management
 
 # Create an in-memory log stream
 log_stream = io.StringIO()
@@ -168,5 +169,5 @@ print("*** Unit test passed***")
 
 # Test that copy_df_entry raises an error if one provides a non-valid column name
 print("*** Unit test: check that copy_df_entry raises an error if the entry does not exist ***")
-np.testing.assert_raises(ValueError, pmb.copy_df_entry, name='test', column_name='non_existing_column',number_of_copies=1)
+np.testing.assert_raises(ValueError, df_management._DFManagement._copy_df_entry, df = pmb.df, name='test', column_name='non_existing_column',number_of_copies=1)
 print("*** Unit test passed***")

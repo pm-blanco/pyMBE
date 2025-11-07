@@ -20,6 +20,51 @@ class _DFManagement:
             return super().default(obj)
 
     @classmethod
+    def _add_bond_in_df(cls, df, particle_id1, particle_id2, use_default_bond=False):
+        """
+        Adds a bond entry on the `pymbe.df` storing the particle_ids of the two bonded particles.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            particle_id1(`int`): particle_id of the type of the first particle type of the bonded particles
+            particle_id2(`int`): particle_id of the type of the second particle type of the bonded particles
+            use_default_bond(`bool`, optional): Controls if a bond of type `default` is used to bond particle whose bond types are not defined in `pmb.df`. Defaults to False.
+
+        Returns:
+            df(`DataFrame`): dataframe with pyMBE information with the new bond added.
+            index(`int`): Row index where the bond information has been added in pmb.df.
+        """
+        particle_name1 = df.loc[(df['particle_id']==particle_id1) & (df['pmb_type']=="particle")].name.values[0]
+        particle_name2 = df.loc[(df['particle_id']==particle_id2) & (df['pmb_type']=="particle")].name.values[0]
+
+        bond_key = cls._find_bond_key(df = df, 
+                                      particle_name1 = particle_name1,
+                                      particle_name2 = particle_name2,
+                                      use_default_bond = use_default_bond)
+        if not bond_key:
+            return None
+        df = cls._copy_df_entry(df = df,
+                                name = bond_key,
+                                column_name = 'particle_id2',
+                                number_of_copies = 1)
+        indexs = np.where(df['name'] == bond_key)
+        index_list = list(indexs[0])
+        used_bond_df = df.loc[df['particle_id2'].notnull()]
+        #without this drop the program crashes when dropping duplicates because the 'bond' column is a dict
+        used_bond_df = used_bond_df.drop([('bond_object','')],axis =1 )
+        used_bond_index = used_bond_df.index.to_list()
+        if not index_list:
+            return None
+        for index in index_list:
+            if index not in used_bond_index:
+                cls._clean_df_row(df = df,
+                                  index = int(index))
+                df.at[index,'particle_id'] = particle_id1
+                df.at[index,'particle_id2'] = particle_id2
+                break
+        return df, index
+
+    @classmethod
     def _add_value_to_df(cls, df, index,key,new_value, non_standard_value=False, overwrite=False):
         """
         Adds a value to a cell in the `pmb.df` DataFrame.
@@ -65,31 +110,6 @@ class _DFManagement:
             df[key] = df[key].apply(deprotect)
         return
     
-    @staticmethod
-    def _clean_ids_in_df_row(df, row):
-        """
-        Cleans particle, residue and molecules ids in `row`.
-        If there are other repeated entries for the same name, drops the row.
-
-        Args:
-            df(`DataFrame`): dataframe with pyMBE information.
-            row(pd.DataFrame): A row from the DataFrame to clean.
-
-        Returns:
-            df(`DataFrame`): dataframe with pyMBE information with cleaned ids in `row    
-        """
-        columns_to_clean = ['particle_id',
-                            'particle_id2', 
-                            'residue_id', 
-                            'molecule_id']
-        if len(df.loc[df['name'] == row['name'].values[0]]) > 1:
-            df = df.drop(row.index).reset_index(drop=True)
-            
-        else:
-            for column_name in columns_to_clean:
-                df.loc[row.index, column_name] = pd.NA
-        return df
-
     @staticmethod
     def _check_if_df_cell_has_a_value(df, index, key):
         """
@@ -140,6 +160,81 @@ class _DFManagement:
             if current_object_type != pmb_type_to_be_defined:
                 raise ValueError (f"The name {name} is already defined in the df with a pmb_type = {current_object_type}, pymMBE does not support objects with the same name but different pmb_types")
 
+    @classmethod
+    def _clean_df_row(cls, df, index, columns_keys_to_clean=("particle_id", "particle_id2", "residue_id", "molecule_id")):
+        """
+        Cleans the columns of `pmb.df` in `columns_keys_to_clean` of the row with index `index` by assigning them a pd.NA value.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            index(`int`): Index of the row to clean.
+            columns_keys_to_clean(`list` of `str`, optional): List with the column keys to be cleaned. Defaults to [`particle_id`, `particle_id2`, `residue_id`, `molecule_id`].
+        """   
+        for column_key in columns_keys_to_clean:
+            cls._add_value_to_df(df = df,
+                                 key = (column_key,''),
+                                 index = index,
+                                 new_value = pd.NA)
+        df.fillna(pd.NA, 
+                  inplace = True)
+
+    @staticmethod
+    def _clean_ids_in_df_row(df, row):
+        """
+        Cleans particle, residue and molecules ids in `row`.
+        If there are other repeated entries for the same name, drops the row.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            row(pd.DataFrame): A row from the DataFrame to clean.
+
+        Returns:
+            df(`DataFrame`): dataframe with pyMBE information with cleaned ids in `row    
+        """
+        columns_to_clean = ['particle_id',
+                            'particle_id2', 
+                            'residue_id', 
+                            'molecule_id']
+        if len(df.loc[df['name'] == row['name'].values[0]]) > 1:
+            df = df.drop(row.index).reset_index(drop=True)
+            
+        else:
+            for column_name in columns_to_clean:
+                df.loc[row.index, column_name] = pd.NA
+        return df
+
+    @staticmethod
+    def _copy_df_entry(df, name, column_name, number_of_copies):
+        '''
+        Creates 'number_of_copies' of a given 'name' in `pymbe.df`.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            name(`str`): Label of the particle/residue/molecule type to be created. `name` must be defined in `pmb.df`
+            column_name(`str`): Column name to use as a filter. 
+            number_of_copies(`int`): number of copies of `name` to be created.
+
+        Returns:
+            df(`DataFrame`): dataframe with pyMBE information with the new copies of `name` added.
+
+        Note:
+            - Currently, column_name only supports "particle_id", "particle_id2", "residue_id" and "molecule_id" 
+        '''
+        valid_column_names=["particle_id", "residue_id", "molecule_id", "particle_id2" ]
+        if column_name not in valid_column_names:
+            raise ValueError(f"{column_name} is not a valid column_name, currently only the following are supported: {valid_column_names}")
+        df_by_name = df.loc[df.name == name]
+        if number_of_copies != 1:                           
+            df_by_name_repeated = pd.concat ([df_by_name]*(number_of_copies-1), ignore_index=True)
+            # Concatenate the new particle rows to  `df`
+            df = pd.concat ([df,df_by_name_repeated], ignore_index=True)
+        else:
+            if not df_by_name[column_name].isnull().values.any():     
+                df_by_name = df_by_name[df_by_name.index == df_by_name.index.min()] 
+                df_by_name_repeated = pd.concat ([df_by_name]*(number_of_copies), ignore_index=True)
+                df_by_name_repeated[column_name] = pd.NA
+                df = pd.concat ([df,df_by_name_repeated], ignore_index=True)
+        return df
 
     @staticmethod
     def _create_variable_with_units(variable, units_registry):
@@ -223,6 +318,37 @@ class _DFManagement:
         bond_object = getattr(espressomd.interactions, bond)(**params)
         bond_object._bond_id = bond_id
         return bond_object
+    
+    @staticmethod
+    def _find_bond_key(df, particle_name1, particle_name2, use_default_bond=False):
+        """
+        Searches for the `name` of the bond between `particle_name1` and `particle_name2` in `pymbe.df` and returns it.
+        
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            particle_name1(`str`): label of the type of the first particle type of the bonded particles.
+            particle_name2(`str`): label of the type of the second particle type of the bonded particles.
+            use_default_bond(`bool`, optional): If it is activated, the "default" bond is returned if no bond is found between `particle_name1` and `particle_name2`. Defaults to 'False'. 
+
+        Returns:
+            bond_key (str): `name` of the bond between `particle_name1` and `particle_name2` if a matching bond exists
+
+        Note:
+            - If `use_default_bond`=`True`, it returns "default" if no key is found.
+        """
+        bond_keys = [f'{particle_name1}-{particle_name2}', f'{particle_name2}-{particle_name1}']
+        bond_defined=False
+        for bond_key in bond_keys:
+            if bond_key in df["name"].values:
+                bond_defined=True
+                correct_key=bond_key
+                break
+        if bond_defined:
+            return correct_key
+        elif use_default_bond:
+            return 'default'
+        else:
+            return None
 
     @staticmethod
     def _setup_df():

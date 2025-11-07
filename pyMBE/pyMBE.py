@@ -108,45 +108,6 @@ class pymbe_library():
             if hard_check:
                 raise ValueError(f"The name {name} has been defined in the pyMBE DataFrame with a pmb_type = {pmb_type}. This function only supports pyMBE objects with pmb_type = {expected_pmb_type}")
             return False
-        
-    
-
-    def add_bond_in_df(self, particle_id1, particle_id2, use_default_bond=False):
-        """
-        Adds a bond entry on the `pymbe.df` storing the particle_ids of the two bonded particles.
-
-        Args:
-            particle_id1(`int`): particle_id of the type of the first particle type of the bonded particles
-            particle_id2(`int`): particle_id of the type of the second particle type of the bonded particles
-            use_default_bond(`bool`, optional): Controls if a bond of type `default` is used to bond particle whose bond types are not defined in `pmb.df`. Defaults to False.
-
-        Returns:
-            index(`int`): Row index where the bond information has been added in pmb.df.
-        """
-        particle_name1 = self.df.loc[(self.df['particle_id']==particle_id1) & (self.df['pmb_type']=="particle")].name.values[0]
-        particle_name2 = self.df.loc[(self.df['particle_id']==particle_id2) & (self.df['pmb_type']=="particle")].name.values[0]
-        
-        bond_key = self.find_bond_key(particle_name1=particle_name1,
-                                    particle_name2=particle_name2, 
-                                    use_default_bond=use_default_bond)
-        if not bond_key:
-            return None
-        self.copy_df_entry(name=bond_key,column_name='particle_id2',number_of_copies=1)
-        indexs = np.where(self.df['name']==bond_key)
-        index_list = list (indexs[0])
-        used_bond_df = self.df.loc[self.df['particle_id2'].notnull()]
-        #without this drop the program crashes when dropping duplicates because the 'bond' column is a dict
-        used_bond_df = used_bond_df.drop([('bond_object','')],axis =1 )
-        used_bond_index = used_bond_df.index.to_list()
-        if not index_list:
-            return None
-        for index in index_list:
-            if index not in used_bond_index:
-                self.clean_df_row(index=int(index))
-                self.df.at[index,'particle_id'] = particle_id1
-                self.df.at[index,'particle_id2'] = particle_id2
-                break
-        return index
 
     def add_bonds_to_espresso(self, espresso_system) :
         """
@@ -177,8 +138,9 @@ class pymbe_library():
             molecule_id(`int`): Id of the molecule
         """
 
-        self.clean_df_row(index=int(molecule_index))
-        
+        df_management._DFManagement._clean_df_row(df = self.df,
+                                                  index = int(molecule_index))
+
         if self.df['molecule_id'].isnull().values.all():
             molecule_id = 0        
         else:
@@ -540,54 +502,6 @@ class pymbe_library():
                     raise ValueError(f'missing a required key "{required_key}" in entry "{pka_name}" of pka_set ("{pka_entry}")')
         return
 
-    def clean_df_row(self, index, columns_keys_to_clean=("particle_id", "particle_id2", "residue_id", "molecule_id")):
-        """
-        Cleans the columns of `pmb.df` in `columns_keys_to_clean` of the row with index `index` by assigning them a pd.NA value.
-
-        Args:
-            index(`int`): Index of the row to clean.
-            columns_keys_to_clean(`list` of `str`, optional): List with the column keys to be cleaned. Defaults to [`particle_id`, `particle_id2`, `residue_id`, `molecule_id`].
-        """   
-        for column_key in columns_keys_to_clean:
-            df_management._DFManagement._add_value_to_df(df=self.df,
-                                                        key=(column_key,''),
-                                                        index=index,
-                                                        new_value=pd.NA)
-        self.df.fillna(pd.NA, inplace=True)
-        return
-
-        
-    
-
-    def copy_df_entry(self, name, column_name, number_of_copies):
-        '''
-        Creates 'number_of_copies' of a given 'name' in `pymbe.df`.
-
-        Args:
-            name(`str`): Label of the particle/residue/molecule type to be created. `name` must be defined in `pmb.df`
-            column_name(`str`): Column name to use as a filter. 
-            number_of_copies(`int`): number of copies of `name` to be created.
-        
-        Note:
-            - Currently, column_name only supports "particle_id", "particle_id2", "residue_id" and "molecule_id" 
-        '''
-
-        valid_column_names=["particle_id", "residue_id", "molecule_id", "particle_id2" ]
-        if column_name not in valid_column_names:
-            raise ValueError(f"{column_name} is not a valid column_name, currently only the following are supported: {valid_column_names}")
-        df_by_name = self.df.loc[self.df.name == name]
-        if number_of_copies != 1:                           
-            df_by_name_repeated = pd.concat ([df_by_name]*(number_of_copies-1), ignore_index=True)
-            # Concatenate the new particle rows to  `df`
-            self.df = pd.concat ([self.df,df_by_name_repeated], ignore_index=True)
-        else:
-            if not df_by_name[column_name].isnull().values.any():     
-                df_by_name = df_by_name[df_by_name.index == df_by_name.index.min()] 
-                df_by_name_repeated = pd.concat ([df_by_name]*(number_of_copies), ignore_index=True)
-                df_by_name_repeated[column_name] = pd.NA
-                self.df = pd.concat ([self.df,df_by_name_repeated], ignore_index=True)
-        return
-
     def create_added_salt(self, espresso_system, cation_name, anion_name, c_salt):    
         """
         Creates a `c_salt` concentration of `cation_name` and `anion_name` ions into the `espresso_system`.
@@ -871,32 +785,34 @@ class pymbe_library():
         espresso_system.part.by_id(node1[0]).add_bond((bond_node1_first_monomer, chain_ids[0]))
         espresso_system.part.by_id(node2[0]).add_bond((bond_node2_last_monomer, chain_ids[-1]))
         # Add bonds to data frame
-        bond_index1 = self.add_bond_in_df(particle_id1=node1[0],
-                                    particle_id2=chain_ids[0],
-                                    use_default_bond=False)
-        df_management._DFManagement._add_value_to_df(df=self.df,
-                                                     key=('molecule_id',''),
-                                                     index=int(bond_index1),
-                                                     new_value=molecule_id,
-                                                     overwrite=True)
-        df_management._DFManagement._add_value_to_df(df=self.df,
-                                                     key=('residue_id',''),
-                                                     index=int (bond_index1),
-                                                     new_value=residue_ids[0],
-                                                     overwrite=True)
-        bond_index2 = self.add_bond_in_df(particle_id1=node2[0],
-                                    particle_id2=chain_ids[-1],
-                                    use_default_bond=False)
-        df_management._DFManagement._add_value_to_df(df=self.df,
-                                                     key=('molecule_id',''),
-                                                     index=int(bond_index2),
-                                                     new_value=molecule_id,
-                                                     overwrite=True)
-        df_management._DFManagement._add_value_to_df(df=self.df,
-                                                     key=('residue_id',''),
-                                                     index=int (bond_index2),
-                                                     new_value=residue_ids[-1],
-                                                     overwrite=True)
+        self.df, bond_index1 = df_management._DFManagement._add_bond_in_df(df = self.df,
+                                                                           particle_id1 = node1[0],
+                                                                           particle_id2 = chain_ids[0],
+                                                                           use_default_bond = False)
+        df_management._DFManagement._add_value_to_df(df = self.df,
+                                                     key = ('molecule_id',''),
+                                                     index = int(bond_index1),
+                                                     new_value = molecule_id,
+                                                     overwrite = True)
+        df_management._DFManagement._add_value_to_df(df = self.df,
+                                                     key = ('residue_id',''),
+                                                     index = int(bond_index1),
+                                                     new_value = residue_ids[0],
+                                                     overwrite = True)
+        self.df, bond_index2 = df_management._DFManagement._add_bond_in_df(df = self.df,
+                                                                           particle_id1 = node2[0],
+                                                                           particle_id2 = chain_ids[-1],
+                                                                           use_default_bond = False)
+        df_management._DFManagement._add_value_to_df(df = self.df,
+                                                     key = ('molecule_id',''),
+                                                     index = int(bond_index2),
+                                                     new_value = molecule_id,
+                                                     overwrite = True)
+        df_management._DFManagement._add_value_to_df(df = self.df,
+                                                     key = ('residue_id',''),
+                                                     index = int(bond_index2),
+                                                     new_value = residue_ids[-1],
+                                                     overwrite = True)
         return chain_molecule_info
     
     def create_hydrogel_node(self, node_index, node_name, espresso_system):
@@ -968,15 +884,13 @@ class pymbe_library():
                                                     on_surface=True)[0]
         else:
             backbone_vector = np.array(backbone_vector)
-
-        
-            
         first_residue = True
         molecules_info = {}
         residue_list = self.df[self.df['name']==name].residue_list.values [0]
-        self.copy_df_entry(name=name,
-                        column_name='molecule_id',
-                        number_of_copies=number_of_molecules)
+        self.df = df_management._DFManagement._copy_df_entry(df = self.df,
+                                                            name = name,
+                                                            column_name = 'molecule_id',
+                                                            number_of_copies = number_of_molecules)
 
         molecules_index = np.where(self.df['name']==name)
         molecule_index_list =list(molecules_index[0])[-number_of_molecules:]
@@ -1037,9 +951,10 @@ class pymbe_library():
                                                                      overwrite=True)            
                     central_bead_id = residues_info[residue_id]['central_bead_id']
                     espresso_system.part.by_id(central_bead_id).add_bond((bond, previous_residue_id))
-                    bond_index = self.add_bond_in_df(particle_id1=central_bead_id,
-                                        particle_id2=previous_residue_id,
-                                        use_default_bond=use_default_bond) 
+                    self.df, bond_index = df_management._DFManagement._add_bond_in_df(df = self.df,
+                                                                                      particle_id1 = central_bead_id,
+                                                                                      particle_id2 = previous_residue_id,
+                                                                                      use_default_bond = use_default_bond) 
                     df_management._DFManagement._add_value_to_df(df=self.df,
                                                                  key=('molecule_id',''),
                                                                  index=int (bond_index),
@@ -1074,21 +989,23 @@ class pymbe_library():
         self._check_if_name_has_right_type(name=name,
                                            expected_pmb_type="particle")
         # Copy the data of the particle `number_of_particles` times in the `df`
-        self.copy_df_entry(name=name,
-                          column_name='particle_id',
-                          number_of_copies=number_of_particles)
-        # Get information from the particle type `name` from the df     
-        z = self.df.loc[self.df['name']==name].state_one.z.values[0]
+        self.df = df_management._DFManagement._copy_df_entry(df = self.df,
+                                                             name = name,
+                                                             column_name = 'particle_id',
+                                                             number_of_copies = number_of_particles)
+        # Get information from the particle type `name` from the df
+        z = self.df.loc[self.df['name'] == name].state_one.z.values[0]
         z = 0. if z is None else z
-        es_type = self.df.loc[self.df['name']==name].state_one.es_type.values[0]
+        es_type = self.df.loc[self.df['name'] == name].state_one.es_type.values[0]
         # Get a list of the index in `df` corresponding to the new particles to be created
-        index = np.where(self.df['name']==name)
-        index_list =list(index[0])[-number_of_particles:]
+        index = np.where(self.df['name'] == name)
+        index_list = list(index[0])[-number_of_particles:]
         # Create the new particles into  `espresso_system`
         created_pid_list=[]
-        for index in range (number_of_particles):
-            df_index=int (index_list[index])
-            self.clean_df_row(index=df_index)
+        for index in range(number_of_particles):
+            df_index = int(index_list[index])
+            df_management._DFManagement._clean_df_row(df = self.df, 
+                                                      index = df_index)
             if position is None:
                 particle_position = self.rng.random((1, 3))[0] *np.copy(espresso_system.box_l)
             else:
@@ -1126,43 +1043,36 @@ class pymbe_library():
             return
         self._check_if_name_has_right_type(name=name,
                                            expected_pmb_type="protein")
-        self.copy_df_entry(name=name,
-                            column_name='molecule_id',
-                            number_of_copies=number_of_proteins)
-        protein_index = np.where(self.df['name']==name)
-        protein_index_list =list(protein_index[0])[-number_of_proteins:]
-        
-        box_half=espresso_system.box_l[0]/2.0
 
+        self.df = df_management._DFManagement._copy_df_entry(df = self.df,
+                                                             name = name,
+                                                             column_name = 'molecule_id',
+                                                             number_of_copies = number_of_proteins)
+        protein_index = np.where(self.df['name'] == name)
+        protein_index_list = list(protein_index[0])[-number_of_proteins:]
+        box_half = espresso_system.box_l[0] / 2.0
         for molecule_index in protein_index_list:     
-
             molecule_id = self.assign_molecule_id(molecule_index=molecule_index)
-
             protein_center = self.generate_coordinates_outside_sphere(radius = 1, 
                                                                         max_dist=box_half, 
                                                                         n_samples=1, 
                                                                         center=[box_half]*3)[0]
-   
             for residue in topology_dict.keys():
-
                 residue_name = re.split(r'\d+', residue)[0]
                 residue_number = re.split(r'(\d+)', residue)[1]
                 residue_position = topology_dict[residue]['initial_pos']
                 position = residue_position + protein_center
-
                 particle_id = self.create_particle(name=residue_name,
                                                             espresso_system=espresso_system,
                                                             number_of_particles=1,
                                                             position=[position], 
                                                             fix = True)
-                
                 index = self.df[self.df['particle_id']==particle_id[0]].index.values[0]
                 df_management._DFManagement._add_value_to_df(df=self.df,
                                                              key=('residue_id',''),
                                                              index=int (index),
                                                              new_value=int(residue_number),
                                                              overwrite=True)
-
                 df_management._DFManagement._add_value_to_df(df=self.df,
                                                              key=('molecule_id',''),
                                                              index=int (index),
@@ -1190,9 +1100,10 @@ class pymbe_library():
                                            expected_pmb_type="residue")
         
         # Copy the data of a residue in the `df
-        self.copy_df_entry(name=name,
-                            column_name='residue_id',
-                            number_of_copies=1)
+        self.df = df_management._DFManagement._copy_df_entry(df = self.df,
+                                                             name = name,
+                                                             column_name = 'residue_id',
+                                                             number_of_copies = 1)
         residues_index = np.where(self.df['name']==name)
         residue_index_list =list(residues_index[0])[-1:]
         # search for defined particle and residue names
@@ -1207,7 +1118,8 @@ class pymbe_library():
         # Dict structure {residue_id:{"central_bead_id":central_bead_id, "side_chain_ids":[particle_id1, ...]}}
         residues_info={}
         for residue_index in residue_index_list:     
-            self.clean_df_row(index=int(residue_index))
+            df_management._DFManagement._clean_df_row(df = self.df,
+                                                       index = int(residue_index))
             # Assign a residue_id
             if self.df['residue_id'].isnull().all():
                 residue_id=0
@@ -1266,9 +1178,10 @@ class pymbe_library():
                                                                 overwrite = True)
                     side_chain_beads_ids.append(side_bead_id)
                     espresso_system.part.by_id(central_bead_id).add_bond((bond, side_bead_id))
-                    index = self.add_bond_in_df(particle_id1=central_bead_id,
-                                        particle_id2=side_bead_id,
-                                        use_default_bond=use_default_bond)
+                    self.df, index = df_management._DFManagement._add_bond_in_df(df = self.df,
+                                                                                 particle_id1 = central_bead_id,
+                                                                                 particle_id2 = side_bead_id,
+                                                                                 use_default_bond = use_default_bond)
                     df_management._DFManagement._add_value_to_df(df = self.df,
                                                                  key = ('residue_id',''),
                                                                  index = int(index),
@@ -1318,9 +1231,10 @@ class pymbe_library():
                                                                      new_value = residue_id, 
                                                                      overwrite = True)
                     espresso_system.part.by_id(central_bead_id).add_bond((bond, central_bead_side_chain_id))
-                    index = self.add_bond_in_df(particle_id1=central_bead_id,
-                                        particle_id2=central_bead_side_chain_id,
-                                        use_default_bond=use_default_bond)
+                    self.df, index = df_management._DFManagement._add_bond_in_df(df = self.df,
+                                                                                 particle_id1 = central_bead_id,
+                                                                                 particle_id2 = central_bead_side_chain_id,
+                                                                                 use_default_bond = use_default_bond)
                     df_management._DFManagement._add_value_to_df(df = self.df,
                                                                  key = ('residue_id',''),
                                                                  index = int(index),
@@ -1980,34 +1894,7 @@ class pymbe_library():
         pmb_type_df = pmb_type_df.dropna( axis=1, thresh=1)
         return pmb_type_df
 
-    def find_bond_key(self, particle_name1, particle_name2, use_default_bond=False):
-        """
-        Searches for the `name` of the bond between `particle_name1` and `particle_name2` in `pymbe.df` and returns it.
-        
-        Args:
-            particle_name1(`str`): label of the type of the first particle type of the bonded particles.
-            particle_name2(`str`): label of the type of the second particle type of the bonded particles.
-            use_default_bond(`bool`, optional): If it is activated, the "default" bond is returned if no bond is found between `particle_name1` and `particle_name2`. Defaults to 'False'. 
-
-        Returns:
-            bond_key (str): `name` of the bond between `particle_name1` and `particle_name2` if a matching bond exists
-
-        Note:
-            - If `use_default_bond`=`True`, it returns "default" if no key is found.
-        """
-        bond_keys = [f'{particle_name1}-{particle_name2}', f'{particle_name2}-{particle_name1}']
-        bond_defined=False
-        for bond_key in bond_keys:
-            if bond_key in self.df["name"].values:
-                bond_defined=True
-                correct_key=bond_key
-                break
-        if bond_defined:
-            return correct_key
-        elif use_default_bond:
-            return 'default'
-        else:
-            return 
+    
 
     def find_value_from_es_type(self, es_type, column_name):
         """
@@ -2140,11 +2027,12 @@ class pymbe_library():
             - If `use_default_bond`=True and no bond is defined between `particle_name1` and `particle_name2`, it returns the default bond defined in `pmb.df`.
             - If `hard_check`=`True` stops the code when no bond is found.
         """
-        bond_key = self.find_bond_key(particle_name1=particle_name1, 
-                                    particle_name2=particle_name2, 
-                                    use_default_bond=use_default_bond)
+        bond_key = df_management._DFManagement._find_bond_key(df = self.df,
+                                                              particle_name1 = particle_name1, 
+                                                              particle_name2 = particle_name2, 
+                                                              use_default_bond = use_default_bond)
         if bond_key:
-            return self.df[self.df['name']==bond_key].l0.values[0]
+            return self.df[self.df['name'] == bond_key].l0.values[0]
         else:
             msg = f"Bond not defined between particles {particle_name1} and {particle_name2}"
             if hard_check:
@@ -2673,10 +2561,11 @@ class pymbe_library():
             - If `use_default_bond`=True and no bond is defined between `particle_name1` and `particle_name2`, it returns the default bond defined in `pmb.df`.
             - If `hard_check`=`True` stops the code when no bond is found.
         """
-        
-        bond_key = self.find_bond_key(particle_name1=particle_name1, 
-                                    particle_name2=particle_name2, 
-                                    use_default_bond=use_default_bond)
+
+        bond_key = df_management._DFManagement._find_bond_key(df = self.df,
+                                                              particle_name1 = particle_name1,
+                                                              particle_name2 = particle_name2,
+                                                              use_default_bond = use_default_bond)
         if use_default_bond:
             if not df_management._DFManagement._check_if_name_is_defined_in_df(name="default", df=self.df):
                 raise ValueError(f"use_default_bond is set to {use_default_bond} but no default bond has been defined. Please define a default bond with pmb.define_default_bond")

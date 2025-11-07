@@ -285,15 +285,15 @@ class Test(ut.TestCase):
             df_management._DFManagement._convert_str_to_bond_object('QuarticBond({"r_0": 1., "k": 1.})')
 
         # check bond keys
-        self.assertEqual(pmb.find_bond_key('A', 'A'), 'A-A')
-        self.assertEqual(pmb.find_bond_key('B', 'B'), 'B-B')
-        self.assertEqual(pmb.find_bond_key('A', 'A', use_default_bond=True), 'A-A')
-        self.assertEqual(pmb.find_bond_key('Z', 'Z', use_default_bond=True), 'default')
-        self.assertIsNone(pmb.find_bond_key('A', 'B'))
-        self.assertIsNone(pmb.find_bond_key('B', 'A'))
-        self.assertIsNone(pmb.find_bond_key('Z', 'Z'))
-        self.assertEqual(pmb.find_bond_key('A', 'B', use_default_bond=True), 'default')
-        
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'A'), 'A-A')
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'B', particle_name2 = 'B'), 'B-B')
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'A', use_default_bond=True), 'A-A')
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'Z', particle_name2 = 'Z', use_default_bond=True), 'default')
+        self.assertIsNone(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'B'))
+        self.assertIsNone(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'B', particle_name2 = 'A'))
+        self.assertIsNone(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'Z', particle_name2 = 'Z'))
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'B', use_default_bond=True), 'default')
+
         self.assertIsNone(pmb.search_bond('A', 'B', hard_check=False))
         log_contents = log_stream.getvalue()
         self.assertIn("Bond not defined between particles A and B", log_contents)
@@ -313,8 +313,8 @@ class Test(ut.TestCase):
                                                      key = ('particle_id',''), 
                                                      new_value = 20,
                                                      index = np.where(pmb.df['name']=='B')[0][0])
-        self.assertIsNone(pmb.add_bond_in_df(10, 20, use_default_bond=False))
-        self.assertIsNone(pmb.add_bond_in_df(10, 20, use_default_bond=True))
+        self.assertIsNone(df_management._DFManagement._add_bond_in_df(pmb.df, 10, 20, use_default_bond=False))
+        self.assertIsNone(df_management._DFManagement._add_bond_in_df(pmb.df, 10, 20, use_default_bond=True))
 
         # check bond lengths
         self.assertAlmostEqual(pmb.get_bond_length('A', 'A'),
