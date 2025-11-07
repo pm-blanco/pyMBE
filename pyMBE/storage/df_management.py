@@ -1,8 +1,145 @@
 import pandas as pd
 import json
 import re
+import numpy as np
+import logging
+import warnings
 
 class _DFManagement:
+
+    class _NumpyEncoder(json.JSONEncoder):
+        """
+        Custom JSON encoder that converts NumPy arrays to Python lists
+        and NumPy scalars to Python scalars.
+        """
+        def default(self, obj):
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            if isinstance(obj, np.generic):
+                return obj.item()
+            return super().default(obj)
+
+    @classmethod
+    def _add_value_to_df(cls, df, index,key,new_value, non_standard_value=False, overwrite=False):
+        """
+        Adds a value to a cell in the `pmb.df` DataFrame.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            index(`int`): index of the row to add the value to.
+            key(`str`): the column label to add the value to.
+            non_standard_value(`bool`, optional): Switch to enable insertion of non-standard values, such as `dict` objects. Defaults to False.
+            overwrite(`bool`, optional): Switch to enable overwriting of already existing values in pmb.df. Defaults to False.
+        """
+
+        token = "#protected:"
+
+        def protect(obj):
+            if non_standard_value:
+                return token + json.dumps(obj, cls=cls._NumpyEncoder)
+            return obj
+
+        def deprotect(obj):
+            if non_standard_value and isinstance(obj, str) and obj.startswith(token):
+                return json.loads(obj.removeprefix(token))
+            return obj
+
+        # Make sure index is a scalar integer value
+        index = int(index)
+        assert isinstance(index, int), '`index` should be a scalar integer value.'
+        idx = pd.IndexSlice
+        if cls._check_if_df_cell_has_a_value(df=df, index=index, key=key):
+            old_value = df.loc[index,idx[key]]
+            if not pd.Series([protect(old_value)]).equals(pd.Series([protect(new_value)])):
+                name= df.loc[index,('name','')]
+                pmb_type= df.loc[index,('pmb_type','')]
+                logging.debug(f"You are attempting to redefine the properties of {name} of pmb_type {pmb_type}")    
+                if overwrite:
+                    logging.info(f'Overwritting the value of the entry `{key}`: old_value = {old_value} new_value = {new_value}')
+                if not overwrite:
+                    logging.debug(f"pyMBE has preserved of the entry `{key}`: old_value = {old_value}. If you want to overwrite it with new_value = {new_value}, activate the switch overwrite = True ")
+                    return
+
+        df.loc[index,idx[key]] = protect(new_value)
+        if non_standard_value:
+            df[key] = df[key].apply(deprotect)
+        return
+    
+    @staticmethod
+    def _clean_ids_in_df_row(df, row):
+        """
+        Cleans particle, residue and molecules ids in `row`.
+        If there are other repeated entries for the same name, drops the row.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            row(pd.DataFrame): A row from the DataFrame to clean.
+
+        Returns:
+            df(`DataFrame`): dataframe with pyMBE information with cleaned ids in `row    
+        """
+        columns_to_clean = ['particle_id',
+                            'particle_id2', 
+                            'residue_id', 
+                            'molecule_id']
+        if len(df.loc[df['name'] == row['name'].values[0]]) > 1:
+            df = df.drop(row.index).reset_index(drop=True)
+            
+        else:
+            for column_name in columns_to_clean:
+                df.loc[row.index, column_name] = pd.NA
+        return df
+
+    @staticmethod
+    def _check_if_df_cell_has_a_value(df, index, key):
+        """
+        Checks if a cell in the `pmb.df` at the specified index and column has a value.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            index(`int`): Index of the row to check.
+            key(`str`): Column label to check.
+
+        Returns:
+            `bool`: `True` if the cell has a value, `False` otherwise.
+        """
+        idx = pd.IndexSlice
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return not pd.isna(df.loc[index, idx[key]])
+
+    @staticmethod
+    def _check_if_name_is_defined_in_df(name, df):
+        """
+        Checks if `name` is defined in `pmb.df`.
+
+        Args:
+            name(`str`): label to check if defined in `pmb.df`.
+            df(`DataFrame`): dataframe with pyMBE information.
+
+        Returns:
+            `bool`: `True` for success, `False` otherwise.
+        """
+        return name in df['name'].unique()
+
+    @staticmethod
+    def _check_if_multiple_pmb_types_for_name(name, pmb_type_to_be_defined, df):
+        """
+        Checks if `name` is defined in `pmb.df` with multiple pmb_types.
+
+        Args:
+            name(`str`): label to check if defined in `pmb.df`.
+            pmb_type_to_be_defined(`str`): pmb object type corresponding to `name`.
+            df(`DataFrame`): dataframe with pyMBE information.
+
+        Returns:
+            `bool`: `True` for success, `False` otherwise.
+        """
+        if name in df['name'].unique():
+            current_object_type = df[df['name']==name].pmb_type.values[0]
+            if current_object_type != pmb_type_to_be_defined:
+                raise ValueError (f"The name {name} is already defined in the df with a pmb_type = {current_object_type}, pymMBE does not support objects with the same name but different pmb_types")
+
 
     @staticmethod
     def _create_variable_with_units(variable, units_registry):

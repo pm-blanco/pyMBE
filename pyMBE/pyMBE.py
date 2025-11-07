@@ -109,23 +109,7 @@ class pymbe_library():
                 raise ValueError(f"The name {name} has been defined in the pyMBE DataFrame with a pmb_type = {pmb_type}. This function only supports pyMBE objects with pmb_type = {expected_pmb_type}")
             return False
         
-    def _clean_ids_in_df_row(self, row):
-        """
-        Cleans particle, residue and molecules ids in `row`.
-        If there are other repeated entries for the same name, drops the row.
-
-        Args:
-            row(pd.DataFrame): A row from the DataFrame to clean.
-        """
-        columns_to_clean = ['particle_id',
-                            'particle_id2', 
-                            'residue_id', 
-                            'molecule_id']
-        if len(self.df.loc[self.df['name'] == row['name'].values[0]]) > 1:
-            self.df = self.df.drop(row.index).reset_index(drop=True)
-        else:
-            for column_name in columns_to_clean:
-                self.df.loc[row.index, column_name] = pd.NA
+    
 
     def add_bond_in_df(self, particle_id1, particle_id2, use_default_bond=False):
         """
@@ -1804,7 +1788,8 @@ class pymbe_library():
         if molecule_row.empty:
             raise ValueError(f"No molecule found with molecule_id={molecule_id} in the DataFrame.")
         # Clean molecule from pmb.df
-        self._clean_ids_in_df_row(row=molecule_row)
+        self.df = df_management._DFManagement._clean_ids_in_df_row(df  = self.df, 
+                                                                   row = molecule_row)
         # Delete particles and residues in the molecule
         residue_mask = (self.df['molecule_id'] == molecule_id) & (self.df['pmb_type'] == "residue")
         residue_rows = self.df.loc[residue_mask]
@@ -1819,8 +1804,9 @@ class pymbe_library():
         for _ in range(number_of_bonds):
             bond_mask = (self.df['molecule_id'] == molecule_id) & (self.df['pmb_type'] == "bond")
             bond_rows = self.df.loc[bond_mask]
-            row=bond_rows.loc[[bond_rows.index[0]]]
-            self._clean_ids_in_df_row(row=row)
+            row = bond_rows.loc[[bond_rows.index[0]]]
+            self.df = df_management._DFManagement._clean_ids_in_df_row(df = self.df, 
+                                                                       row = row)
 
     def delete_particle_in_system(self, particle_id, espresso_system):
         """
@@ -1838,7 +1824,8 @@ class pymbe_library():
         if particle_row.empty:
             raise ValueError(f"No particle found with particle_id={particle_id} in the DataFrame.")
         espresso_system.part.by_id(particle_id).remove()
-        self._clean_ids_in_df_row(particle_row)
+        self.df = df_management._DFManagement._clean_ids_in_df_row(df = self.df, 
+                                                                   row = particle_row)
 
     def delete_residue_in_system(self, residue_id, espresso_system):
         """
@@ -1857,7 +1844,8 @@ class pymbe_library():
         residue_map=self.get_particle_id_map(object_name=residue_row["name"].values[0])["residue_map"]
         particle_ids = residue_map[residue_id]
         # Clean residue from pmb.df
-        self._clean_ids_in_df_row(row=residue_row)
+        self.df = df_management._DFManagement._clean_ids_in_df_row(df = self.df, 
+                                                                   row = residue_row)
         # Delete particles in the residue
         for particle_id in particle_ids:
             self.delete_particle_in_system(particle_id=particle_id,
@@ -1868,9 +1856,9 @@ class pymbe_library():
         for _ in range(number_of_bonds):
             bond_mask = (self.df['residue_id'] == residue_id) & (self.df['pmb_type'] == "bond")
             bond_rows = self.df.loc[bond_mask]
-            row=bond_rows.loc[[bond_rows.index[0]]]
-            self._clean_ids_in_df_row(row=row)
-
+            row = bond_rows.loc[[bond_rows.index[0]]]
+            self.df = df_management._DFManagement._clean_ids_in_df_row(df = self.df, 
+                                                                       row = row)
 
     def determine_reservoir_concentrations(self, pH_res, c_salt_res, activity_coefficient_monovalent_pair, max_number_sc_runs=200):
         """

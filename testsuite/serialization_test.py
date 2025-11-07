@@ -23,12 +23,12 @@ import pandas as pd
 import pyMBE
 import pyMBE.lib.analysis
 import scipy.constants
-
+import pyMBE.storage.df_management as df_management
 
 class Serialization(ut.TestCase):
 
     def test_json_encoder(self):
-        encoder = pyMBE.pymbe_library.NumpyEncoder
+        encoder = df_management._DFManagement._NumpyEncoder
         # Python types
         self.assertEqual(json.dumps(1, cls=encoder), "1")
         self.assertEqual(json.dumps([1, 2], cls=encoder), "[1, 2]")

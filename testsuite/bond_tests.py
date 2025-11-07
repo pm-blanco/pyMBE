@@ -305,10 +305,14 @@ class Test(ut.TestCase):
             pmb.search_bond('A', 'B' , hard_check=True)
 
         # check invalid bond index
-        pmb.add_value_to_df(key=('particle_id',''), new_value=10,
-                            index=np.where(pmb.df['name']=='A')[0][0])
-        pmb.add_value_to_df(key=('particle_id',''), new_value=20,
-                            index=np.where(pmb.df['name']=='B')[0][0])
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     key = ('particle_id',''), 
+                                                     new_value = 10,
+                                                     index = np.where(pmb.df['name']=='A')[0][0])
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     key = ('particle_id',''), 
+                                                     new_value = 20,
+                                                     index = np.where(pmb.df['name']=='B')[0][0])
         self.assertIsNone(pmb.add_bond_in_df(10, 20, use_default_bond=False))
         self.assertIsNone(pmb.add_bond_in_df(10, 20, use_default_bond=True))
 

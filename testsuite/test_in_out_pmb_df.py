@@ -22,6 +22,7 @@ import pandas as pd
 import unittest as ut
 import logging
 import re
+import pyMBE.storage.df_management as df_management
 
 # Create an in-memory log stream
 log_stream = io.StringIO()
@@ -61,7 +62,10 @@ class Serialization(ut.TestCase):
         new_value='T2'
         name=pmb.df.loc[index,key]
         pmb_type=pmb.df.loc[index,('pmb_type','')]
-        pmb.add_value_to_df(index=index,key=key,new_value=new_value)
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     index = index,
+                                                     key = key,
+                                                     new_value = new_value)
         log_contents = log_stream.getvalue()
         warning_msg1=f"You are attempting to redefine the properties of {name} of pmb_type {pmb_type}"
         warning_msg2=f"pyMBE has preserved of the entry `{key}`: old_value = {old_value}. If you want to overwrite it with new_value = {new_value}, activate the switch overwrite = True"
@@ -76,7 +80,11 @@ class Serialization(ut.TestCase):
         new_value='T2'
         name=pmb.df.loc[index,key]
         pmb_type=pmb.df.loc[index,('pmb_type','')]
-        pmb.add_value_to_df(index=index,key=key,new_value=new_value,overwrite=True)
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     index = index,
+                                                     key = key,
+                                                     new_value = new_value,
+                                                     overwrite = True)
         log_contents = log_stream.getvalue()
         warning_msg1=f"You are attempting to redefine the properties of {name} of pmb_type {pmb_type}"
         warning_msg2=f"Overwritting the value of the entry `{key}`: old_value = {old_value} new_value = {new_value}"
