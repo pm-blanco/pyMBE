@@ -341,7 +341,23 @@ class _DFManagement:
         bond_object = getattr(espressomd.interactions, bond)(**params)
         bond_object._bond_id = bond_id
         return bond_object
-    
+
+    @staticmethod
+    def delete_entries_in_df(df, entry_name):
+        """
+        Deletes entries with name `entry_name` from the DataFrame if it exists.
+
+        Args:
+            df(`DataFrame`): dataframe with pyMBE information.
+            entry_name (`str`): The name of the entry in the dataframe to delete.
+
+        Returns:
+            df(`DataFrame`): dataframe with pyMBE information with the entry deleted.
+        """
+        if entry_name in df["name"].values:
+            df = df[df["name"] != entry_name].reset_index(drop=True)
+        return df
+
     @staticmethod
     def _find_bond_key(df, particle_name1, particle_name2, use_default_bond=False):
         """

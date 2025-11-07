@@ -96,9 +96,9 @@ class Serialization(ut.TestCase):
     def test_delete_entries_df(self):
         print("*** Unit test: test that entries in df are deleted properly using `delete_entries_in_df`  ***")
         
-        pmb.delete_entries_in_df(entry_name="S1-S2")
+        df_management._DFManagement._delete_entries_in_df(entry_name="S1-S2")
         assert pmb.df[pmb.df["name"]=="S1-S2"].empty
-        pmb.delete_entries_in_df(entry_name="S1")
+        df_management._DFManagement._delete_entries_in_df(entry_name="S1")
         assert pmb.df[pmb.df["name"]=="S1"].empty
 
         residue_parameters={"R1":{"name": "R1",
@@ -111,7 +111,7 @@ class Serialization(ut.TestCase):
         for parameter_set in residue_parameters.values():
             pmb.define_residue(**parameter_set)
 
-        pmb.delete_entries_in_df(entry_name="R1")
+        df_management._DFManagement._delete_entries_in_df(entry_name="R1")
         assert pmb.df[pmb.df["name"]=="R1"].empty
 
         molecule_parameters={"M1":{"name": "M1",
@@ -120,7 +120,7 @@ class Serialization(ut.TestCase):
         for parameter_set in molecule_parameters.values():
             pmb.define_molecule(**parameter_set)
 
-        pmb.delete_entries_in_df(entry_name="M1")
+        df_management._DFManagement._delete_entries_in_df(entry_name="M1")
         assert pmb.df[pmb.df["name"]=="M1"].empty
         print("*** Unit passed ***")
 

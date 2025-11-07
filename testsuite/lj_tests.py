@@ -130,7 +130,7 @@ pmb.setup_lj_interactions(espresso_system=espresso_system)
 log_contents = log_stream.getvalue()
 assert "The following particles do not have a defined value of sigma or epsilon" in log_contents
 
-pmb.delete_entries_in_df("X")
+df_management._DFManagement._delete_entries_in_df("X")
 
 # ValueError if combining-rule other than Lorentz_-Berthelot is used
 input_params = {"espresso_system":espresso_system, "combining_rule": "Geometric"}

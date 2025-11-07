@@ -73,6 +73,26 @@ class pymbe_library():
         self.lattice_builder = None
         self.root = importlib.resources.files(__package__)   
 
+    def _define_particle_entry_in_df(self,name):
+        """
+        Defines a particle entry in pmb.df.
+
+        Args:
+            name(`str`): Unique label that identifies this particle type.
+
+        Returns:
+            index(`int`): Index of the particle in pmb.df  
+        """
+
+        if  _DFm._check_if_name_is_defined_in_df(name=name, df=self.df):
+            index = self.df[self.df['name']==name].index[0]                                   
+        else:
+            index = len(self.df)
+            self.df.at [index, 'name'] = name
+            self.df.at [index,'pmb_type'] = 'particle'
+        self.df.fillna(pd.NA, inplace=True)
+        return index
+
     def _check_supported_molecule(self, molecule_name,valid_pmb_types):
         """
         Checks if the molecule name `molecule_name` is supported by a method of pyMBE.
@@ -1442,27 +1462,7 @@ class pymbe_library():
         self.df.at [index,'pmb_type'] = 'molecule'
         self.df.at [index,('residue_list','')] = residue_list
         self.df.fillna(pd.NA, inplace=True)
-        return
-
-    def define_particle_entry_in_df(self,name):
-        """
-        Defines a particle entry in pmb.df.
-
-        Args:
-            name(`str`): Unique label that identifies this particle type.
-
-        Returns:
-            index(`int`): Index of the particle in pmb.df  
-        """
-
-        if  _DFm._check_if_name_is_defined_in_df(name=name, df=self.df):
-            index = self.df[self.df['name']==name].index[0]                                   
-        else:
-            index = len(self.df)
-            self.df.at [index, 'name'] = name
-            self.df.at [index,'pmb_type'] = 'particle'
-        self.df.fillna(pd.NA, inplace=True)
-        return index
+        return   
 
     def define_particle(self, name, z=0, acidity=pd.NA, pka=pd.NA, sigma=pd.NA, epsilon=pd.NA, cutoff=pd.NA, offset=pd.NA,overwrite=False):
         """
@@ -1487,7 +1487,7 @@ class pymbe_library():
             - The default setup corresponds to the Weeks−Chandler−Andersen (WCA) model, corresponding to purely steric interactions.
             - For more information on `sigma`, `epsilon`, `cutoff` and `offset` check `pmb.setup_lj_interactions()`.
         """ 
-        index=self.define_particle_entry_in_df(name=name)
+        index=self._define_particle_entry_in_df(name=name)
         _DFm._check_if_multiple_pmb_types_for_name(name=name,
                                                    pmb_type_to_be_defined='particle',
                                                    df=self.df)
@@ -1648,18 +1648,7 @@ class pymbe_library():
         self.df.at [index,'central_bead'] = central_bead
         self.df.at [index,('side_chains','')] = side_chains
         self.df.fillna(pd.NA, inplace=True)
-        return 
-
-    def delete_entries_in_df(self, entry_name):
-        """
-        Deletes entries with name `entry_name` from the DataFrame if it exists.
-
-        Args:
-            entry_name (`str`): The name of the entry in the dataframe to delete.
-
-        """
-        if entry_name in self.df["name"].values:
-            self.df = self.df[self.df["name"] != entry_name].reset_index(drop=True)
+        return    
 
     def delete_molecule_in_system(self, molecule_id, espresso_system):
         """
@@ -1867,9 +1856,7 @@ class pymbe_library():
         """
         pmb_type_df = self.df.loc[self.df['pmb_type']== pmb_type]
         pmb_type_df = pmb_type_df.dropna( axis=1, thresh=1)
-        return pmb_type_df
-
-    
+        return pmb_type_df   
 
     def find_value_from_es_type(self, es_type, column_name):
         """
@@ -2621,7 +2608,7 @@ class pymbe_library():
                 acidity = pd.NA
                 logging.warning("the keyword 'inert' for acidity has been replaced by setting acidity = pd.NA. For backwards compatibility, acidity has been set to pd.NA. Support for `acidity = 'inert'` may be deprecated in future releases of pyMBE")
 
-        self.define_particle_entry_in_df(name=name)
+        self._define_particle_entry_in_df(name=name)
         
         for index in self.df[self.df['name']==name].index:       
             if pka is not pd.NA:
