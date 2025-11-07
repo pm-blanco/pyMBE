@@ -343,7 +343,7 @@ class _DFManagement:
         return bond_object
 
     @staticmethod
-    def delete_entries_in_df(df, entry_name):
+    def _delete_entries_in_df(df, entry_name):
         """
         Deletes entries with name `entry_name` from the DataFrame if it exists.
 
