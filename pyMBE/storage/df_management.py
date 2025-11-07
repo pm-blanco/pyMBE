@@ -110,6 +110,29 @@ class _DFManagement:
             df[key] = df[key].apply(deprotect)
         return
     
+    @classmethod
+    def _assign_molecule_id(cls, df, molecule_index):
+        """
+        Assigns the `molecule_id` of the pmb object given by `pmb_type`
+        
+        Args:
+            molecule_index(`int`): index of the current `pmb_object_type` to assign the `molecule_id`
+        Returns:
+            molecule_id(`int`): Id of the molecule
+        """
+        cls._clean_df_row(df = df,
+                          index = int(molecule_index))
+
+        if df['molecule_id'].isnull().values.all():
+            molecule_id = 0        
+        else:
+            molecule_id = df['molecule_id'].max() +1
+        cls._add_value_to_df(df = df,
+                             key = ('molecule_id',''),
+                             index = int(molecule_index),
+                             new_value = molecule_id)
+        return molecule_id
+
     @staticmethod
     def _check_if_df_cell_has_a_value(df, index, key):
         """
