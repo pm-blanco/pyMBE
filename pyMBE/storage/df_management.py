@@ -325,7 +325,7 @@ class _DFManagement:
             bond_object(`obj`): ESPResSo bond object.
 
         Note:
-            Current supported bonds are: HarmonicBond and FeneBond
+            Currently supported bonds are: HarmonicBond and FeneBond
         """
         import espressomd.interactions
 
