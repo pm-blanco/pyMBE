@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Methods that interact directly with the pyMBE dataframe are now private and stored in a dedicated module in `storage/df_management`. These methods also have been refactored to be stateless methods, i.e. making it impossible for them to change behavior during the pyMBE object lifetime or for the user to change the pyMBE dataframe unless explicitely calling them. This includes the methods: `add_bond_in_df`, `add_value_to_df`, `assign_molecule_id`, `check_if_df_cell_has_a_value`, `check_if_name_is_defined_in_df`, `check_if_multiple_pmb_types_for_name`, `clean_df_row`, `clean_ids_in_df_row`, `copy_df_entry`, `create_variable_with_units`, `convert_columns_to_original_format`, `convert_str_to_bond_object`, `delete_entries_in_df`, `find_bond_key`, `setup_df`. (#145)
 - `define_particle_entry_in_df` is now a private method in pyMBE, as it is a convenience method for internal use. (#145)
-- The custom `NumpyEncoder` is nos a private class in the private module `storage/df_management` because it is  only internally used in pyMBE for serialization/deserialization. (#145)
+- The custom `NumpyEncoder` is now a private class in the private module `storage/df_management` because it is  only internally used in pyMBE for serialization/deserialization. (#145)
 
 ## [1.0.0] - 2025-10-08
 
