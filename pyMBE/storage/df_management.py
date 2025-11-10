@@ -231,7 +231,7 @@ class _DFManagement:
             row(pd.DataFrame): A row from the DataFrame to clean.
 
         Returns:
-            df(`DataFrame`): dataframe with pyMBE information with cleaned ids in `row    
+            df(`DataFrame`): dataframe with pyMBE information with cleaned ids in `row`
         """
         columns_to_clean = ['particle_id',
                             'particle_id2', 
