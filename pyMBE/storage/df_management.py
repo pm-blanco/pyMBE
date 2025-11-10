@@ -200,7 +200,7 @@ class _DFManagement:
         if name in df['name'].unique():
             current_object_type = df[df['name']==name].pmb_type.values[0]
             if current_object_type != pmb_type_to_be_defined:
-                raise ValueError (f"The name {name} is already defined in the df with a pmb_type = {current_object_type}, pymMBE does not support objects with the same name but different pmb_types")
+                raise ValueError (f"The name {name} is already defined in the df with a pmb_type = {current_object_type}, pyMBE does not support objects with the same name but different pmb_types")
 
     @classmethod
     def _clean_df_row(cls, df, index, columns_keys_to_clean=("particle_id", "particle_id2", "residue_id", "molecule_id")):
