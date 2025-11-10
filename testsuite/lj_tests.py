@@ -18,8 +18,8 @@
 
 # Import pyMBE and other libraries
 import pyMBE
+import pyMBE.storage.df_management as df_management
 import numpy as np
-
 import logging
 import io
 # Create an in-memory log stream
@@ -48,7 +48,7 @@ for parameter_key in input_parameters.keys():
 print("*** Unit test passed ***")
 print("*** Unit test: check that `offset` defaults to 0***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define dummy particle
 pmb.define_particle(name="A")
 
@@ -59,7 +59,7 @@ print("*** Unit test passed ***")
 
 print("*** Unit test: check that `cutoff` defaults to `2**(1./6.) reduced_length` ***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define dummy particle
 pmb.define_particle(name="A")
 
@@ -95,7 +95,7 @@ print("*** Unit test passed ***")
 print("*** Unit test: test that setup_lj_interactions sets up inert particles correctly ***")
 
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define particles
 A_input_parameters={"name":"A", 
                     "sigma":1*pmb.units.nm, 
@@ -130,7 +130,8 @@ pmb.setup_lj_interactions(espresso_system=espresso_system)
 log_contents = log_stream.getvalue()
 assert "The following particles do not have a defined value of sigma or epsilon" in log_contents
 
-pmb.delete_entries_in_df("X")
+df_management._DFManagement._delete_entries_in_df(df=pmb.df, 
+                                                  entry_name="X")     
 
 # ValueError if combining-rule other than Lorentz_-Berthelot is used
 input_params = {"espresso_system":espresso_system, "combining_rule": "Geometric"}
