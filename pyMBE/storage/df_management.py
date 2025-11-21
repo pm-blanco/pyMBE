@@ -24,7 +24,75 @@ import numpy as np
 import logging
 import warnings
 
+from typing import Dict, Type, Callable
+from pyMBE.storage.base_type import PMBBaseModel
+
 class _DFManagement:
+    """
+    Storage:
+        templates[pmb_type][template_name] = pd.DataFrame
+        instances[pmb_type][particle_id] = InstanceModel
+    """
+
+    def __init__(self):
+        self.templates: Dict[str, Dict[str, PMBBaseModel]] = {}
+        self.instances: Dict[str, Dict[int, PMBBaseModel]] = {}
+
+    # ----------------------------------------------------------------------
+    # TEMPLATE MANAGEMENT
+    # ----------------------------------------------------------------------
+    def register_template(self, template: PMBBaseModel):
+        pmb_type = template.pmb_type
+        template_name = template.name
+
+        if pmb_type not in self.templates:
+            self.templates[pmb_type] = {}
+
+        if template_name in self.templates[pmb_type]:
+            raise ValueError(
+                f"Template '{template_name}' already exists for type '{pmb_type}'."
+            )
+
+        self.templates[pmb_type][template_name] = template
+
+    # ----------------------------------------------------------------------
+    # INSTANCE MANAGEMENT
+    # ----------------------------------------------------------------------
+    def register_instance(self, instance: PMBBaseModel):
+        pmb_type = instance.pmb_type
+
+        if not hasattr(instance, "particle_id"):
+            raise TypeError(
+                "Instances must define a 'particle_id' field."
+            )
+
+        pid = instance.particle_id
+        template_name = instance.name
+
+        # Check template
+        if pmb_type not in self.templates:
+            raise KeyError(
+                f"No templates registered for pmb_type '{pmb_type}'."
+            )
+
+        if template_name not in self.templates[pmb_type]:
+            raise ValueError(
+                f"Template '{template_name}' does not exist for type '{pmb_type}'."
+            )
+
+        # Check instance dictionary
+        if pmb_type not in self.instances:
+            self.instances[pmb_type] = {}
+
+        # Enforce unique particle_id
+        if pid in self.instances[pmb_type]:
+            raise ValueError(
+                f"Duplicate particle_id={pid} for type '{pmb_type}'."
+            )
+
+        self.instances[pmb_type][pid] = instance
+
+
 
     class _NumpyEncoder(json.JSONEncoder):
         """
