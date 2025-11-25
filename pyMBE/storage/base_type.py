@@ -7,7 +7,8 @@ class PMBBaseModel(BaseModel):
     """
 
     pmb_type: str = Field(frozen=True)
-
+    name: str
+    
     class Config:
         validate_assignment = True
         extra = "forbid"

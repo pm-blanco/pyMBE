@@ -1,22 +1,15 @@
-# instances/particle.py
-
+from typing import Optional
 from pydantic import Field, field_validator
 from ..base_type import PMBBaseModel
 
 
 class ParticleInstance(PMBBaseModel):
     """
-    Instantiated particle in the system:
-    - particle_id is unique
-    - template_name links to ParticleTemplate
-    - can override active_state if needed
+    A placed particle within the simulation.
     """
-
-    pmb_type: str = Field(default="particle", frozen=True)
-
+    pmb_type: str = "particle"
     particle_id: int
-    name: str
-    active_state: str | None = None
+    state_name: str
 
     @field_validator("particle_id")
     def validate_particle_id(cls, pid):

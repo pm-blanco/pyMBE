@@ -1,15 +1,14 @@
-from typing import Dict
+from typing import Dict, Literal
 from pydantic import Field, field_validator
 
 from ..base_type import PMBBaseModel
 
 
 class ParticleState(PMBBaseModel):
-    pmb_type: str = Field(default="particle", frozen=True)
-
-    label: str
-    es_type: int
+    pmb_type: Literal["particle_state"] = "particle_state"
+    name: str                      # e.g. "HA", "A-", "H+"
     charge: int
+    es_type: float                  # label in espresso
 
 
 class ParticleTemplate(PMBBaseModel):
@@ -21,30 +20,22 @@ class ParticleTemplate(PMBBaseModel):
     """
 
     pmb_type: str = Field(default="particle", frozen=True)
-
-    name: str
     sigma: float
     epsilon: float
-
-    states: Dict[str, ParticleState] = Field(default_factory=dict)
-    default_state: str | None = None
+    states: Dict[str, ParticleState] = {}
 
     # ---------------- Validators -----------------
 
-    @field_validator("default_state")
-    def validate_default_state(cls, v, values):
-        if v is None:
-            return v
-        if "states" in values and v not in values["states"]:
-            raise ValueError(
-                f"default_state '{v}' not found in states "
-                f"({list(values['states'].keys())})"
-            )
-        return v
-
-    # ---------------- Helpers -----------------
-
     def add_state(self, state: ParticleState):
-        if state.label in self.states:
-            raise ValueError(f"State '{state.label}' already exists.")
-        self.states[state.label] = state
+        if state.name in self.states:
+            raise ValueError(f"State {state.name} already exists in template {self.name}")
+        self.states[state.name] = state
+
+    @classmethod
+    def single_state(cls, name: str, charge: int, es_type: str, epsilon: float = 1.0):
+        """
+        Convenience constructor for particles such as H+ that only need one state.
+        """
+        state = ParticleState(name=name, charge=charge, es_type=es_type)
+        return cls(name=name, epsilon=epsilon, states={name: state})
+

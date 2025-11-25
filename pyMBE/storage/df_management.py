@@ -25,7 +25,10 @@ import logging
 import warnings
 
 from typing import Dict, Type, Callable
-from pyMBE.storage.base_type import PMBBaseModel
+from pyMBE.storage.templates.particle import ParticleTemplate
+from pyMBE.storage.instances.particle import ParticleInstance
+from pyMBE.storage.reactions.reaction import Reaction
+
 
 class _DFManagement:
     """
@@ -35,63 +38,93 @@ class _DFManagement:
     """
 
     def __init__(self):
-        self.templates: Dict[str, Dict[str, PMBBaseModel]] = {}
-        self.instances: Dict[str, Dict[int, PMBBaseModel]] = {}
+        self.templates: Dict[str, ParticleTemplate] = {}
+        self.instances: Dict[int, ParticleInstance] = {}
+        self.reactions: Dict[str, Reaction] = {}
 
-    # ----------------------------------------------------------------------
+    # ----------------------------------------
     # TEMPLATE MANAGEMENT
-    # ----------------------------------------------------------------------
-    def register_template(self, template: PMBBaseModel):
-        pmb_type = template.pmb_type
-        template_name = template.name
+    # ----------------------------------------
+    def register_template(self, template: ParticleTemplate):
+        if template.name in self.templates:
+            raise ValueError(f"Template '{template.name}' already exists.")
+        self.templates[template.name] = template
 
-        if pmb_type not in self.templates:
-            self.templates[pmb_type] = {}
-
-        if template_name in self.templates[pmb_type]:
-            raise ValueError(
-                f"Template '{template_name}' already exists for type '{pmb_type}'."
-            )
-
-        self.templates[pmb_type][template_name] = template
-
-    # ----------------------------------------------------------------------
+    # ----------------------------------------
     # INSTANCE MANAGEMENT
-    # ----------------------------------------------------------------------
-    def register_instance(self, instance: PMBBaseModel):
-        pmb_type = instance.pmb_type
-
-        if not hasattr(instance, "particle_id"):
-            raise TypeError(
-                "Instances must define a 'particle_id' field."
-            )
-
+    # ----------------------------------------
+    def register_instance(self, instance: ParticleInstance):
         pid = instance.particle_id
-        template_name = instance.name
+        if pid in self.instances:
+            raise ValueError(f"Instance with id '{pid}' already exists.")
 
-        # Check template
-        if pmb_type not in self.templates:
-            raise KeyError(
-                f"No templates registered for pmb_type '{pmb_type}'."
-            )
+        # validate particle template
+        if instance.name not in self.templates:
+            raise ValueError(f"Particle template '{instance.name}' not found.")
 
-        if template_name not in self.templates[pmb_type]:
-            raise ValueError(
-                f"Template '{template_name}' does not exist for type '{pmb_type}'."
-            )
+        # validate state
+        tpl = self.templates[instance.name]
+        if instance.state_name not in tpl.states:
+            raise ValueError(f"State '{instance.state_name}' not found for particle '{instance.name}'.")
 
-        # Check instance dictionary
-        if pmb_type not in self.instances:
-            self.instances[pmb_type] = {}
+        self.instances[pid] = instance
 
-        # Enforce unique particle_id
-        if pid in self.instances[pmb_type]:
-            raise ValueError(
-                f"Duplicate particle_id={pid} for type '{pmb_type}'."
-            )
+    # ----------------------------------------
+    # REACTIONS
+    # ----------------------------------------
+    def register_reaction(self, reaction: Reaction):
+        if reaction.name in self.reactions:
+            raise ValueError(f"Reaction '{reaction.name}' already exists.")
 
-        self.instances[pmb_type][pid] = instance
+        # validate participants
+        for p in reaction.participants:
+            if p.particle_name not in self.templates:
+                raise ValueError(f"Unknown particle '{p.particle_name}' in reaction '{reaction.name}'.")
 
+            tpl = self.templates[p.particle_name]
+            if p.state_name not in tpl.states:
+                raise ValueError(
+                    f"State '{p.state_name}' not defined for particle '{p.particle_name}'."
+                )
+
+        self.reactions[reaction.name] = reaction
+
+    # ----------------------------------------
+    # DATAFRAME EXPORT
+    # ----------------------------------------
+    def get_templates_df(self):
+        rows = []
+        for tpl in self.templates.values():
+            for sname, st in tpl.states.items():
+                rows.append({
+                    "particle": tpl.name,
+                    "state": sname,
+                    "charge": st.charge,
+                    "es_type": st.es_type
+                })
+        return pd.DataFrame(rows)
+
+    def get_instances_df(self):
+        rows = []
+        for inst in self.instances.values():
+            rows.append(inst.model_dump())
+        return pd.DataFrame(rows)
+
+    def get_reactions_df(self):
+        rows = []
+        for r in self.reactions.values():
+            stoich = {
+                f"{p.particle_name}:{p.state_name}": p.coefficient
+                for p in r.participants
+            }
+            rows.append({
+                "reaction": r.name,
+                "stoichiometry": stoich,
+                "constant": r.constant,
+                "reaction_type": r.reaction_type,
+                "metadata": r.metadata,
+            })
+        return pd.DataFrame(rows)
 
 
     class _NumpyEncoder(json.JSONEncoder):
