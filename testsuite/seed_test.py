@@ -19,29 +19,37 @@
 import numpy as np 
 import espressomd
 import pyMBE
+import logging
+import io
 
+# Create an in-memory log stream
+log_stream = io.StringIO()
+logging.basicConfig(level=logging.INFO, 
+                    format="%(levelname)s: %(message)s",
+                    handlers=[logging.StreamHandler(log_stream)])
 espresso_system = espressomd.System(box_l = [100]*3)
 
 def build_peptide_in_espresso(seed):
     pmb = pyMBE.pymbe_library(seed=seed)
 
     # Simulation parameters
-    pmb.set_reduced_units(unit_length=0.4*pmb.units.nm,
-                          verbose=False)
+    pmb.set_reduced_units(unit_length=0.4*pmb.units.nm)
 
     # Peptide parameters
     sequence = 'EEEEEEE'
     model = '2beadAA'  # Model with 2 beads per each aminoacid
 
     # Load peptide parametrization from Lunkad, R. et al.  Molecular Systems Design & Engineering (2021), 6(2), 122-131.
-    path_to_interactions=pmb.get_resource("parameters/peptides/Lunkad2021.json")
-    path_to_pka=pmb.get_resource("parameters/pka_sets/CRC1991.json")
+    path_to_interactions=pmb.root / "parameters" / "peptides" / "Lunkad2021.json"
+    path_to_pka=pmb.root / "parameters" / "pka_sets" / "CRC1991.json"
     pmb.load_interaction_parameters(filename=path_to_interactions) 
     pmb.load_pka_set(path_to_pka)
 
     # Defines the peptide in the pyMBE data frame
     peptide_name = 'generic_peptide'
-    pmb.define_peptide(name=peptide_name, sequence=sequence, model=model)
+    pmb.define_peptide(name=peptide_name, 
+                       sequence=sequence, 
+                       model=model)
 
     # Bond parameters
     generic_bond_length=0.4 * pmb.units.nm
@@ -57,7 +65,10 @@ def build_peptide_in_espresso(seed):
     pmb.add_bonds_to_espresso(espresso_system=espresso_system)
 
     # Create molecule in the espresso system
-    pmb.create_pmb_object(name=peptide_name, number_of_objects=1, espresso_system=espresso_system, use_default_bond=True)
+    pmb.create_molecule(name=peptide_name, 
+                        number_of_molecules=1, 
+                        espresso_system=espresso_system, 
+                        use_default_bond=True)
 
     # Extract positions of particles in the peptide
     positions = []

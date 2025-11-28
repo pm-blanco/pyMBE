@@ -22,6 +22,7 @@ import pandas as pd
 import unittest as ut
 import logging
 import re
+import pyMBE.storage.df_management as df_management
 
 # Create an in-memory log stream
 log_stream = io.StringIO()
@@ -61,7 +62,10 @@ class Serialization(ut.TestCase):
         new_value='T2'
         name=pmb.df.loc[index,key]
         pmb_type=pmb.df.loc[index,('pmb_type','')]
-        pmb.add_value_to_df(index=index,key=key,new_value=new_value)
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     index = index,
+                                                     key = key,
+                                                     new_value = new_value)
         log_contents = log_stream.getvalue()
         warning_msg1=f"You are attempting to redefine the properties of {name} of pmb_type {pmb_type}"
         warning_msg2=f"pyMBE has preserved of the entry `{key}`: old_value = {old_value}. If you want to overwrite it with new_value = {new_value}, activate the switch overwrite = True"
@@ -76,7 +80,11 @@ class Serialization(ut.TestCase):
         new_value='T2'
         name=pmb.df.loc[index,key]
         pmb_type=pmb.df.loc[index,('pmb_type','')]
-        pmb.add_value_to_df(index=index,key=key,new_value=new_value,overwrite=True)
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     index = index,
+                                                     key = key,
+                                                     new_value = new_value,
+                                                     overwrite = True)
         log_contents = log_stream.getvalue()
         warning_msg1=f"You are attempting to redefine the properties of {name} of pmb_type {pmb_type}"
         warning_msg2=f"Overwritting the value of the entry `{key}`: old_value = {old_value} new_value = {new_value}"
@@ -88,9 +96,11 @@ class Serialization(ut.TestCase):
     def test_delete_entries_df(self):
         print("*** Unit test: test that entries in df are deleted properly using `delete_entries_in_df`  ***")
         
-        pmb.delete_entries_in_df(entry_name="S1-S2")
+        pmb.df = df_management._DFManagement._delete_entries_in_df(df=pmb.df,
+                                                                    entry_name="S1-S2")
         assert pmb.df[pmb.df["name"]=="S1-S2"].empty
-        pmb.delete_entries_in_df(entry_name="S1")
+        pmb.df = df_management._DFManagement._delete_entries_in_df(df=pmb.df,
+                                                                   entry_name="S1")
         assert pmb.df[pmb.df["name"]=="S1"].empty
 
         residue_parameters={"R1":{"name": "R1",
@@ -103,7 +113,8 @@ class Serialization(ut.TestCase):
         for parameter_set in residue_parameters.values():
             pmb.define_residue(**parameter_set)
 
-        pmb.delete_entries_in_df(entry_name="R1")
+        pmb.df = df_management._DFManagement._delete_entries_in_df(df=pmb.df,
+                                                                   entry_name="R1")
         assert pmb.df[pmb.df["name"]=="R1"].empty
 
         molecule_parameters={"M1":{"name": "M1",
@@ -112,7 +123,8 @@ class Serialization(ut.TestCase):
         for parameter_set in molecule_parameters.values():
             pmb.define_molecule(**parameter_set)
 
-        pmb.delete_entries_in_df(entry_name="M1")
+        pmb.df = df_management._DFManagement._delete_entries_in_df(df=pmb.df,
+                                                                   entry_name="M1")
         assert pmb.df[pmb.df["name"]=="M1"].empty
         print("*** Unit passed ***")
 

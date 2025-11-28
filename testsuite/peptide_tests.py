@@ -21,12 +21,12 @@ import pathlib
 import tempfile
 import subprocess
 import multiprocessing
-from lib import analysis
+from pyMBE.lib import analysis
 import numpy as np
 import pandas as pd
 import unittest as ut
 
-root = pathlib.Path(__file__).parent.parent.resolve()
+root = pathlib.Path(__file__).parent.parent
 data_root = root / "testsuite" / "peptide_tests_data"
 script_path = root / "samples" / "Beyer2024" / "peptide.py"
 test_pH_values = [3, 7, 11]

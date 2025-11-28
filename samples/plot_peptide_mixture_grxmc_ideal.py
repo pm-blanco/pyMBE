@@ -21,6 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import argparse
+import pathlib
 
 parser = argparse.ArgumentParser(description='Plots the titration data from peptide.py and the corresponding analytical solution.')
 parser.add_argument('--sequence1',
@@ -44,14 +45,14 @@ parser.add_argument('--csalt',
                     default= 5e-3, 
                     help='Added salt concentration in the system, in mol/L')
 parser.add_argument('--path_to_data',
-                    type=str,
+                    type=pathlib.Path,
                     required= False,
-                    default="samples/time_series/peptide_mixture_grxmc_ideal/analyzed_data.csv",
+                    default=pathlib.Path(__file__).parent / "time_series" / "peptide_mixture_grxmc_ideal" / "analyzed_data.csv",
                     help='path to the analyzed data')
 parser.add_argument('--output',
-                    type=str,
+                    type=pathlib.Path,
                     required= False,
-                    default="time_series/peptide_mixture_grxmc_ideal",
+                    default=pathlib.Path(__file__).parent / "time_series" / "peptide_mixture_grxmc_ideal",
                     help='output directory')
 parser.add_argument('--mode',
                     type=str,
@@ -82,7 +83,7 @@ peptide2 = 'generic_peptide2'
 pmb.define_peptide (name=peptide2, 
                     sequence=sequence2, 
                     model="1beadAA") # not really relevant for plotting
-path_to_pka=pmb.get_resource("parameters/pka_sets/Hass2015.json")
+path_to_pka=pmb.root / "parameters" / "pka_sets" / "Hass2015.json"
 pmb.load_pka_set(path_to_pka)
 
 # Calculate the ideal titration curve of the peptide with Henderson-Hasselbach equation
@@ -98,8 +99,7 @@ xi_HH = HH_charge_dict["partition_coefficients"]
 
 if args.mode == "plot":
     # Read the analyzed data produced with peptide_mixture_grxmc_ideal
-    time_series_folder_path=pmb.get_resource(args.path_to_data)
-    analyzed_data = pd.read_csv(time_series_folder_path, header=[0,1])
+    analyzed_data = pd.read_csv(args.path_to_data, header=[0,1])
 
     # Plot the results
     fig, ax = plt.subplots(figsize=(10, 7))
@@ -153,5 +153,4 @@ elif args.mode == "store_HH":
                  "Z_HH_peptide1": HH_charge_dict["charges_dict"][peptide1],
                  "Z_HH_peptide2": HH_charge_dict["charges_dict"][peptide2],
                  "xi_HH": HH_charge_dict["partition_coefficients"]})
-    HH_data.to_csv(f"{args.output}/HH_data.csv", 
-                        index=False)
+    HH_data.to_csv(args.output / "HH_data.csv", index=False)

@@ -16,14 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Functional tests for following sample scripts:
-# samples/peptide.py
-# samples/analyze_time_series.py
-# samples/plot_peptide.py
-# TODO:
-# samples/branch_polyampholyte.py
-# samples/plot_branch_polyampholyte.py
-
 import sys
 import pathlib
 import tempfile
@@ -33,7 +25,7 @@ import pandas as pd
 import unittest as ut
 import numpy as np
 
-root = pathlib.Path(__file__).parent.parent.resolve()
+root = pathlib.Path(__file__).parent.parent
 
 def kernel(pH_value,temp_dir_path,sample_path):
     """

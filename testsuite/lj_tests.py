@@ -18,9 +18,16 @@
 
 # Import pyMBE and other libraries
 import pyMBE
+import pyMBE.storage.df_management as df_management
 import numpy as np
-import warnings
-        
+import logging
+import io
+# Create an in-memory log stream
+log_stream = io.StringIO()
+logging.basicConfig(level=logging.INFO, 
+                    format="%(levelname)s: %(message)s",
+                    handlers=[logging.StreamHandler(log_stream)] )
+
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
 
@@ -35,34 +42,30 @@ input_parameters={"name":"A",
 
 pmb.define_particle(**input_parameters)
 for parameter_key in input_parameters.keys():
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        np.testing.assert_equal(actual=pmb.df[parameter_key].values[0], 
-                                desired=input_parameters[parameter_key], 
-                                verbose=True)
+    np.testing.assert_equal(actual=pmb.df[parameter_key].values[0], 
+                            desired=input_parameters[parameter_key], 
+                            verbose=True)
 print("*** Unit test passed ***")
 print("*** Unit test: check that `offset` defaults to 0***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define dummy particle
 pmb.define_particle(name="A")
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    np.testing.assert_equal(actual=pmb.df["offset"].values[0], 
-                        desired=pmb.units.Quantity(0,"reduced_length"), 
-                        verbose=True)
+
+np.testing.assert_equal(actual=pmb.df["offset"].values[0], 
+                    desired=pmb.units.Quantity(0,"reduced_length"), 
+                    verbose=True)
 print("*** Unit test passed ***")
 
 print("*** Unit test: check that `cutoff` defaults to `2**(1./6.) reduced_length` ***")
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define dummy particle
 pmb.define_particle(name="A")
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    np.testing.assert_equal(actual=pmb.df["cutoff"].values[0], 
-                        desired=pmb.units.Quantity(2**(1./6.),"reduced_length"), 
-                        verbose=True)
+
+np.testing.assert_equal(actual=pmb.df["cutoff"].values[0], 
+                    desired=pmb.units.Quantity(2**(1./6.),"reduced_length"), 
+                    verbose=True)
 print("*** Unit test passed ***")
 
 print("*** Unit test: check that define_particle raises a ValueError if sigma is provided with the wrong dimensionality ***")
@@ -92,7 +95,7 @@ print("*** Unit test passed ***")
 print("*** Unit test: test that setup_lj_interactions sets up inert particles correctly ***")
 
 # Clean pmb.df
-pmb.setup_df()
+pmb.df = df_management._DFManagement._setup_df()
 # Define particles
 A_input_parameters={"name":"A", 
                     "sigma":1*pmb.units.nm, 
@@ -123,12 +126,12 @@ pmb.define_particle(**X_input_parameters)
 import espressomd
 espresso_system=espressomd.System(box_l = [50]*3)
 
-with warnings.catch_warnings(record=True) as w:
-    warnings.simplefilter("always")  # Capture all warnings, even those normally ignored
-    pmb.setup_lj_interactions(espresso_system=espresso_system)
-    assert any("The following particles do not have a defined value of sigma or epsilon" in str(warning.message) for warning in w), "Expected warning was not raised!"
+pmb.setup_lj_interactions(espresso_system=espresso_system)
+log_contents = log_stream.getvalue()
+assert "The following particles do not have a defined value of sigma or epsilon" in log_contents
 
-pmb.delete_entries_in_df("X")
+df_management._DFManagement._delete_entries_in_df(df=pmb.df, 
+                                                  entry_name="X")     
 
 # ValueError if combining-rule other than Lorentz_-Berthelot is used
 input_params = {"espresso_system":espresso_system, "combining_rule": "Geometric"}
@@ -201,8 +204,18 @@ lj_labels=pmb.filter_df("LennardJones")["name"].values
 # Particle C has sigma = 0 (ideally behaving particle)
 
 for label in lj_labels:
-    if "C" in label:
-        raise Exception("*** Unit Test failed ***")
+    assert "C" not in label, \
+        f"Error: pmb.setup_lj_interactions() set up LJ interaction for ideal particle with label {label}"
 
 print("*** Unit test passed ***")
+
+print("*** Unit test: test that get_lj_parameters() rasie the ValueError when the combination rule is not Loretz-Berthelot ***")
+
+input_params = {"particle_name1":"A", 
+                "particle_name2":"B", 
+                "combining_rule":"Geometric"}
+np.testing.assert_raises(ValueError, pmb.get_lj_parameters, **input_params)
+
+print("*** All unit tests passed ***")
+
 print("*** All unit tests passed ***")

@@ -4,7 +4,7 @@
   <img alt="pyMBE logo" src="https://github.com/pyMBE-dev/pyMBE/blob/logos/logo_banner.png">
 </picture>
 
-# pyMBE: the Python-based Molecule Builder for ESPResSo 
+# pyMBE: the Python-based Molecule Builder for ESPResSo
 
 ![GitHub Actions](https://github.com/pyMBE-dev/pyMBE/actions/workflows/testsuite.yml/badge.svg)
 [![codecov](https://codecov.io/gh/pyMBE-dev/pyMBE/branch/main/graph/badge.svg)](https://codecov.io/gh/pyMBE-dev/pyMBE)
@@ -12,7 +12,11 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md) 
 
-pyMBE provides tools to facilitate building up molecules with complex architectures in the Molecular Dynamics software [ESPResSo](https://espressomd.org/wordpress/). Some examples of molecules that can be set up with pyMBE are polyelectrolytes, peptides and proteins. pyMBE bookkeeps all the information about the molecule topology, permitting to link each particle to its corresponding residue and molecule. pyMBE uses the [Pint](https://pint.readthedocs.io/en/stable/) library to enable input parameters in any arbitrary unit system, which is later transformed in the reduced unit system used in ESPResSo.
+[comment]: # (introduction start)
+
+pyMBE provides tools to facilitate building up molecules with complex architectures in the Molecular Dynamics software [ESPResSo](https://espressomd.org/wordpress/). Some examples of molecules that can be set up with pyMBE are polyelectrolytes, hydrogels, peptides and globular proteins. pyMBE bookkeeps all the information about the molecule topology, permitting to link each particle to its corresponding residue and molecule. pyMBE uses the [Pint](https://pint.readthedocs.io/en/stable/) library to enable input parameters in any arbitrary unit system, which is later transformed in the reduced unit system used in ESPResSo.
+
+[comment]: # (introduction stop)
 
 An up-to-date documentation of all methods of the library can be found [here](pymbe-dev.github.io/pyMBE/pyMBE.html) and in the source code.
 
@@ -37,10 +41,10 @@ Version requirements are documented in [`requirements.txt`](requirements.txt).
 
 ## Contents
 
+- `pyMBE/`: source code of pyMBE
+- `pyMBE/parameters/`: folder with various sets of parameters from previous works.
 - `figs/`: folder with various images used in the tutorials of pyMBE.
-- `lib/`: folder with various libraries.
 - `maintainer/`: folder with various scripts used by the maintainers.
-- `parameters/`: folder with various sets of parameters from previous works.
 - `samples/`: folder with various sample scripts showcasing how to use pyMBE to setup different systems.
 - `testsuite/`: folder with several test scripts and data for continous integration of the library.
 - `tutorials/`: folder with the available tutorials on pyMBE.
@@ -48,8 +52,9 @@ Version requirements are documented in [`requirements.txt`](requirements.txt).
 - `AUTHORS.md`: list of authors and contributors of pyMBE.
 - `CONTRIBUTING.md`: rules on how to contribute to pyMBE.
 - `LICENSE.txt`: license of pyMBE.
-- `pyMBE.py`: source code of pyMBE
 - `requirements.txt`: list of required libraries to use pyMBE.
+
+[comment]: # (usage start)
 
 ## Usage
 
@@ -125,7 +130,7 @@ $ source pymbe/bin/activate
 (pymbe) $ python3 -c "import espressomd.version; print(espressomd.version.friendly())"
 4.2
 (pymbe) $ python3 -c "import pyMBE; print(pyMBE.__file__)"
-/home/user/Documents/pyMBE/pyMBE.py
+/home/user/Documents/pyMBE/pyMBE/__init__.py
 $ deactivate
 ```
 
@@ -199,6 +204,10 @@ folder and a corresponding line in the `testsuite/CTestTestfile.cmake` file.
 Every contribution is automatically tested in CI using EESSI (https://www.eessi.io)
 and the [EESSI GitHub Action](https://github.com/marketplace/actions/eessi).
 
+[comment]: # (usage stop)
+
+[comment]: # (references start)
+
 ## References
 
 Check out the corresponding [paper](https://doi.org/10.1063/5.0216389) to learn more about pyMBE.
@@ -224,14 +233,21 @@ If you use pyMBE in your research, please cite our paper:
 When using a released version of pyMBE, we recommend citing the corresponding
 [Zenodo record](https://doi.org/10.5281/zenodo.12102634) in addition to the pyMBE paper,
 for example: "We set up our coarse-grained models using pyMBE v0.8.0
-[\@beyer2024pymbe; \@zenodo2024pymbe]".
+\cite{beyer2024pymbe,zenodo2024pymbe}".
 
-Please also make sure to properly cite the original authors if you use the resources provided in the `parameters/` folder.
+Please also make sure to properly cite the original authors if you use the resources provided in the `pyMBE/parameters/` folder.
 The relevant references are provided as metadata in the corresponding files.
+
+[comment]: # (references stop)
+
+### Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) to discover the different ways you can
+contribute to pyMBE and find our authorship policy and code of conduct.
 
 ## License
 
-Copyright (C) 2023-2024 pyMBE-dev team
+Copyright (C) 2023-2025 pyMBE-dev team
 
 pyMBE is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by

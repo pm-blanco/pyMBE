@@ -25,9 +25,9 @@ import tqdm
 
 # Import pyMBE
 import pyMBE
-from lib import analysis
-from lib import handy_functions as hf
-from lib.handy_functions import do_reaction
+from pyMBE.lib import analysis
+from pyMBE.lib import handy_functions as hf
+from pyMBE.lib.handy_functions import do_reaction
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -47,8 +47,9 @@ parser.add_argument('--mode',
                     choices=["short-run","long-run", "test"],
                     help='sets for how long the simulation runs')
 parser.add_argument('--output',
-                    type=str,
+                    type=Path,
                     required= False,
+                    default=Path(__file__).parent / "Beyer2024" / "time_series" / "peptides",
                     help='output directory')
 parser.add_argument('--no_verbose', action='store_false', help="Switch to deactivate verbose",default=True)
 args = parser.parse_args()
@@ -76,8 +77,8 @@ if sequence not in valid_sequences:
     raise ValueError(f"ERROR: the only valid peptide sequence for this test script are {valid_sequences}")
 
 if sequence in Lunkad_test_sequences:
-    path_to_interactions=pmb.get_resource("parameters/peptides/Lunkad2021.json")
-    path_to_pka=pmb.get_resource("parameters/pka_sets/CRC1991.json")
+    path_to_interactions=pmb.root / "parameters" / "peptides" / "Lunkad2021.json"
+    path_to_pka=pmb.root / "parameters" / "pka_sets" / "CRC1991.json"
     pmb.load_interaction_parameters(filename=path_to_interactions)
     pmb.load_pka_set(filename=path_to_pka)
     model = '2beadAA'  # Model with 2 beads per each aminoacid
@@ -90,8 +91,8 @@ if sequence in Lunkad_test_sequences:
 
 elif sequence in Blanco_test_sequence:
     pmb.set_reduced_units(unit_length=0.4*pmb.units.nm)
-    pmb.load_interaction_parameters (pmb.get_resource(path='parameters/peptides/Blanco2021.json'))
-    pmb.load_pka_set (pmb.get_resource(path='parameters/pka_sets/Nozaki1967.json'))
+    pmb.load_interaction_parameters (pmb.root / "parameters" / "peptides" / "Blanco2021.json")
+    pmb.load_pka_set (pmb.root / "parameters" / "pka_sets" / "Nozaki1967.json")
     model = '1beadAA'
     N_peptide_chains = 1
     c_salt = 5e-3 * pmb.units.mol/ pmb.units.L
@@ -151,22 +152,20 @@ espresso_system.cell_system.skin=0.4
 pmb.add_bonds_to_espresso(espresso_system=espresso_system)
 
 # Create your molecules into the espresso system
-pmb.create_pmb_object(name=sequence,
-                    number_of_objects= N_peptide_chains,
+pmb.create_molecule(name=sequence,
+                    number_of_molecules=N_peptide_chains,
                     espresso_system=espresso_system)
 
 # Create counterions for the peptide chains
 pmb.create_counterions(object_name=sequence,
                     cation_name=cation_name,
                     anion_name=anion_name,
-                    espresso_system=espresso_system,
-                    verbose=verbose)
+                    espresso_system=espresso_system)
 
 c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                      cation_name=cation_name,
                      anion_name=anion_name,
-                     c_salt=c_salt,
-                    verbose=verbose)
+                     c_salt=c_salt)
 
 cpH, labels = pmb.setup_cpH(counter_ion=cation_name,
                                                 constant_pH=pH)
@@ -186,8 +185,7 @@ if verbose:
     print(f"The non-interacting type is set to {non_interacting_type}")
 
 #Setup the potential energy
-pmb.setup_lj_interactions (espresso_system=espresso_system,
-                            warnings=verbose)
+pmb.setup_lj_interactions (espresso_system=espresso_system)
 hf.relax_espresso_system(espresso_system=espresso_system,
                           seed=langevin_seed)
 hf.setup_electrostatic_interactions(units=pmb.units,
@@ -232,17 +230,13 @@ for sample in tqdm.trange(Nsamples,disable=not verbose):
     time_series["charge"].append(charge_dict["mean"])
     time_series["rg"].append(Rg[0])
 
-data_path = args.output
-if data_path is None:
-    data_path=pmb.get_resource(path="samples/Beyer2024") / "time_series" / "peptides"
-
-Path(data_path).mkdir(parents=True, 
-                       exist_ok=True)
+data_path=args.output
+data_path.mkdir(parents=True, exist_ok=True)
 
 time_series=pd.DataFrame(time_series)
 filename=analysis.built_output_name(input_dict=inputs)
 
-time_series.to_csv(f"{data_path}/{filename}_time_series.csv", index=False)
+time_series.to_csv(data_path / f"{filename}_time_series.csv", index=False)
 
 if verbose:
     print("*** DONE ***")

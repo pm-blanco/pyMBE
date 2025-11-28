@@ -31,16 +31,16 @@ import argparse
 
 # Import pyMBE
 import pyMBE
-from lib import analysis
+from pyMBE.lib import analysis
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
 
 # Load some functions from the handy_scripts library for convenience
-from lib.handy_functions import setup_electrostatic_interactions
-from lib.handy_functions import relax_espresso_system
-from lib.handy_functions import setup_langevin_dynamics
-from lib.handy_functions import do_reaction
+from pyMBE.lib.handy_functions import setup_electrostatic_interactions
+from pyMBE.lib.handy_functions import relax_espresso_system
+from pyMBE.lib.handy_functions import setup_langevin_dynamics
+from pyMBE.lib.handy_functions import do_reaction
 
 
 #######################################################
@@ -51,23 +51,29 @@ from lib.handy_functions import do_reaction
 parser = argparse.ArgumentParser()
 parser.add_argument("--c_salt_res", 
                     type=float, 
-                    help="Concentration of NaCl in the reservoir in mol/l.")
+                    help="Concentration of NaCl in the reservoir in mol/l.",
+                    default=0.01)
 parser.add_argument("--c_mon_sys", 
                     type=float, 
-                    help="Concentration of acid monomers in the system in mol/l.")
+                    help="Concentration of acid monomers in the system in mol/l.",
+                    default=0.01)
 parser.add_argument("--pH_res", 
                     type=float, 
-                    help="pH-value in the reservoir.")
+                    help="pH-value in the reservoir.",
+                    default=7)
 parser.add_argument("--pKa_value", 
                     type=float, 
-                    help="pKa-value of the polyacid monomers.")
+                    help="pKa-value of the polyacid monomers.",
+                    default=4)
 parser.add_argument('--mode',
                     type=str,
                     default= "short-run",
-                    help='sets for how long the simulation runs, valid modes are {valid_modes}')
+                    choices=["short-run","long-run", "test"],
+                    help='sets for how long the simulation runs')
 parser.add_argument('--output',
-                    type=str,
+                    type=Path,
                     required= False,
+                    default=Path(__file__).parent / "time_series" / "grxmc",
                     help='output directory')
 parser.add_argument('--no_verbose', 
                     action='store_false', 
@@ -80,13 +86,8 @@ inputs={"csalt": args.c_salt_res,
         "cmon": args.c_mon_sys,
         "pH": args.pH_res,
         "pKa": args.pKa_value}
-
 mode=args.mode
-valid_modes=["short-run","long-run", "test"]
 verbose=args.no_verbose
-
-if mode not in valid_modes:
-    raise ValueError(f"Mode {mode} is not currently supported, valid modes are {valid_modes}")
 
 # Units and general parameters
 pmb.set_reduced_units(unit_length=0.355*pmb.units.nm)
@@ -105,9 +106,16 @@ else:
 polyacid_name = 'polyacid'
 
 # Add the polyacid to the pmb instance
-pmb.define_particle(name='A', acidity='acidic', sigma=1*pmb.units('reduced_length'), epsilon=1*pmb.units('reduced_energy'), pka=args.pKa_value)
-pmb.define_residue(name='rA', central_bead="A", side_chains=[])
-pmb.define_molecule(name=polyacid_name, residue_list=['rA']*Chain_length)
+pmb.define_particle(name='A', 
+                    acidity='acidic', 
+                    sigma=1*pmb.units('reduced_length'), 
+                    epsilon=1*pmb.units('reduced_energy'), 
+                    pka=args.pKa_value)
+pmb.define_residue(name='rA', 
+                   central_bead="A", 
+                   side_chains=[])
+pmb.define_molecule(name=polyacid_name, 
+                    residue_list=['rA']*Chain_length)
 
 
 bond_type = 'FENE'
@@ -118,7 +126,9 @@ fene_bond = {'k'      : fene_spring_constant,
              'd_r_max': fene_r_max, 
             }
 
-pmb.define_bond(bond_type = bond_type, bond_parameters = fene_bond, particle_pairs = [['A','A']])
+pmb.define_bond(bond_type = bond_type, 
+                bond_parameters = fene_bond, 
+                particle_pairs = [['A','A']])
 
 # Parameters of the small ions
 proton_name = 'Hplus'
@@ -126,10 +136,22 @@ hydroxide_name = 'OHminus'
 sodium_name = 'Na'
 chloride_name = 'Cl'
 
-pmb.define_particle(name=proton_name, z=1, sigma=1*pmb.units('reduced_length'), epsilon=1*pmb.units('reduced_energy'))
-pmb.define_particle(name=hydroxide_name,  z=-1, sigma=1*pmb.units('reduced_length'), epsilon=1*pmb.units('reduced_energy'))
-pmb.define_particle(name=sodium_name, z=1, sigma=1*pmb.units('reduced_length'), epsilon=1*pmb.units('reduced_energy'))
-pmb.define_particle(name=chloride_name, z=-1, sigma=1*pmb.units('reduced_length'), epsilon=1*pmb.units('reduced_energy'))
+pmb.define_particle(name=proton_name, 
+                    z=1, 
+                    sigma=1*pmb.units('reduced_length'), 
+                    epsilon=1*pmb.units('reduced_energy'))
+pmb.define_particle(name=hydroxide_name,  
+                    z=-1, 
+                    sigma=1*pmb.units('reduced_length'), 
+                    epsilon=1*pmb.units('reduced_energy'))
+pmb.define_particle(name=sodium_name, 
+                    z=1, 
+                    sigma=1*pmb.units('reduced_length'), 
+                    epsilon=1*pmb.units('reduced_energy'))
+pmb.define_particle(name=chloride_name, 
+                    z=-1, 
+                    sigma=1*pmb.units('reduced_length'), 
+                    epsilon=1*pmb.units('reduced_energy'))
 
 # System parameters (some are read from the command line)
 c_mon_sys = args.c_mon_sys * pmb.units.mol/ pmb.units.L
@@ -159,20 +181,38 @@ if verbose:
     print("Added bonds")
 
 # Create molecules and ions in the espresso system
-pmb.create_pmb_object(name=polyacid_name, number_of_objects=N_chains, espresso_system=espresso_system)
-pmb.create_counterions(object_name=polyacid_name, cation_name=proton_name, anion_name=hydroxide_name, espresso_system=espresso_system)
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system, cation_name=sodium_name, anion_name=chloride_name, c_salt=c_salt_res)
+pmb.create_molecule(name=polyacid_name, 
+                    number_of_molecules=N_chains, 
+                    espresso_system=espresso_system)
+pmb.create_counterions(object_name=polyacid_name, 
+                       cation_name=proton_name, 
+                       anion_name=hydroxide_name, 
+                       espresso_system=espresso_system)
+c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system, 
+                                          cation_name=sodium_name, 
+                                          anion_name=chloride_name, 
+                                          c_salt=c_salt_res)
 if verbose:
     print("Created molecules")
 
 # Set up the reactions
-path_to_ex_pot=pmb.get_resource("testsuite/data/src/")
-ionic_strength, excess_chemical_potential_monovalent_pairs_in_bulk_data, bjerrums, excess_chemical_potential_monovalent_pairs_in_bulk_data_error =np.loadtxt(f"{path_to_ex_pot}/excess_chemical_potential.dat", unpack=True)
-excess_chemical_potential_monovalent_pair_interpolated = interpolate.interp1d(ionic_strength, excess_chemical_potential_monovalent_pairs_in_bulk_data)
-activity_coefficient_monovalent_pair = lambda x: np.exp(excess_chemical_potential_monovalent_pair_interpolated(x.to('1/(reduced_length**3 * N_A)').magnitude))
+path_to_ex_pot=pmb.root / "parameters" / "salt"
+monovalent_salt_ref_data=pd.read_csv(f"{path_to_ex_pot}/excess_chemical_potential_excess_pressure.csv")
+ionic_strength = pmb.units.Quantity(monovalent_salt_ref_data["cs_bulk_[1/sigma^3]"].values, "1/reduced_length**3")
+excess_chemical_potential = pmb.units.Quantity(monovalent_salt_ref_data["excess_chemical_potential_[kbT]"].values, "reduced_energy")
+excess_chemical_potential_interpolated = interpolate.interp1d(ionic_strength.m_as("1/reduced_length**3"), 
+                                                                                excess_chemical_potential.m_as("reduced_energy"))
+activity_coefficient_monovalent_pair = lambda x: np.exp(excess_chemical_potential_interpolated(x.to('1/(reduced_length**3 * N_A)').magnitude))
 if verbose:
     print("Setting up reactions...")
-grxmc, labels, ionic_strength_res = pmb.setup_grxmc_reactions(pH_res=pH_res, c_salt_res=c_salt_res, proton_name=proton_name, hydroxide_name=hydroxide_name, salt_cation_name=sodium_name, salt_anion_name=chloride_name, activity_coefficient=activity_coefficient_monovalent_pair, pka_set=pka_set)
+grxmc, labels, ionic_strength_res = pmb.setup_grxmc_reactions(pH_res=pH_res, 
+                                                              c_salt_res=c_salt_res, 
+                                                              proton_name=proton_name, 
+                                                              hydroxide_name=hydroxide_name, 
+                                                              salt_cation_name=sodium_name, 
+                                                              salt_anion_name=chloride_name, 
+                                                              activity_coefficient=activity_coefficient_monovalent_pair, 
+                                                              pka_set=pka_set)
 if verbose:
     print('The acid-base reaction has been sucessfully set up for ', labels)
 
@@ -209,7 +249,8 @@ setup_electrostatic_interactions(units=pmb.units,
                                 verbose=verbose)
 espresso_system.thermostat.turn_off()
 relax_espresso_system(espresso_system=espresso_system,
-                      seed=langevin_seed)
+                      seed=langevin_seed,
+                      max_displacement=0.01)
 setup_langevin_dynamics(espresso_system=espresso_system, 
                         kT = pmb.kT, 
                         seed = langevin_seed,
@@ -252,13 +293,9 @@ for i in tqdm.trange(N_production_loops, disable=not verbose):
     time_series["alpha"].append(np.abs(charge_dict["mean"])/Chain_length)
 
 data_path = args.output
-if data_path is None:
-    data_path=pmb.get_resource(path="samples/Beyer2024")+"/time_series/grxmc"
-
-Path(data_path).mkdir(parents=True, 
-                       exist_ok=True)
+data_path.mkdir(parents=True, exist_ok=True)
 
 time_series=pd.DataFrame(time_series)
 filename=analysis.built_output_name(input_dict=inputs)
 
-time_series.to_csv(f"{data_path}/{filename}_time_series.csv", index=False)
+time_series.to_csv(data_path / f"{filename}_time_series.csv", index=False)

@@ -35,7 +35,7 @@ THREADS = $(shell echo $(MAKEFLAGS) | grep -oP "\\-j *\\d+")
 
 docs:
 	mkdir -p ./documentation
-	PDOC_ALLOW_EXEC=0 ${PYTHON} -m pdoc ./pyMBE.py -o ./documentation --docformat google
+	PYTHONWARNINGS=error PDOC_ALLOW_EXEC=0 ${PYTHON} -m pdoc ./pyMBE -o ./documentation --docformat google
 
 unit_tests:
 	COVERAGE=$(COVERAGE) ctest --output-on-failure $(THREADS) --test-dir testsuite -LE long --timeout 300
@@ -66,4 +66,4 @@ tutorial:
 	jupyter-lab tutorials/pyMBE_tutorial.ipynb
 
 pylint:
-	${PYTHON} -m pylint pyMBE.py lib/ testsuite/ samples/ maintainer/ visualization/
+	${PYTHON} -m pylint pyMBE/ testsuite/ samples/ maintainer/ visualization/

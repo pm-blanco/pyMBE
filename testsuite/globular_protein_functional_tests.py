@@ -16,7 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from lib import analysis
+import pyMBE
+from pyMBE.lib import analysis
 import sys
 import pathlib
 import tempfile
@@ -26,9 +27,9 @@ import numpy as np
 import pandas as pd
 import unittest as ut
 import glob 
-       
+import importlib.resources
 
-root = pathlib.Path(__file__).parent.parent.resolve()
+root = pathlib.Path(__file__).parent.parent
 data_root = root / "testsuite" / "globular_protein_tests_data"
 script_path = root / "samples" / "Beyer2024" / "globular_protein.py"
 test_pH_values = [2, 5, 7]
@@ -46,7 +47,7 @@ def kernel(protein_pdb):
         for pH in test_pH_values:
             print(f"pH = {pH}")
             run_command=[sys.executable, script_path, "--pdb", protein_pdb, "--pH", str(pH),
-                         "--path_to_cg", f"parameters/globular_proteins/{protein_pdb}.vtf",
+                         "--path_to_cg", importlib.resources.files(pyMBE) / "parameters" / "globular_proteins" / f"{protein_pdb}.vtf",
                          "--mode", "test", "--no_verbose", "--output", time_series_path]
             print(subprocess.list2cmdline(run_command))
             subprocess.check_output(run_command)
@@ -61,7 +62,7 @@ def kernel_move (protein_pdb):
     with tempfile.TemporaryDirectory() as time_series_path:
 
         run_command=[sys.executable, script_path, "--pdb", protein_pdb, "--pH", str(2),
-                        "--path_to_cg", f"parameters/globular_proteins/{protein_pdb}.vtf",
+                        "--path_to_cg", importlib.resources.files(pyMBE) / "parameters" / "globular_proteins" / f"{protein_pdb}.vtf",
                         "--mode", "test", "--output",  time_series_path, "--move_protein", "--no_verbose", "--ideal" ]
         print(subprocess.list2cmdline(run_command))
         subprocess.check_output(run_command)

@@ -20,12 +20,15 @@ import tempfile
 import espressomd
 import pandas as pd
 import numpy as np
+import logging
+import io
+import pyMBE.storage.df_management as df_management
 
-version = pd.__version__.split(".")
-# This feature was introduced in Pandasv2.2.0
-if int(version[0]) >= 2 and int(version[1]) >= 2:
-    pd.set_option('future.no_silent_downcasting', True)
-
+# Create an in-memory log stream
+log_stream = io.StringIO()
+logging.basicConfig(level=logging.INFO, 
+                    format="%(levelname)s: %(message)s",
+                    handlers=[logging.StreamHandler(log_stream)])
 # Create an instance of pyMBE library
 import pyMBE
 pmb = pyMBE.pymbe_library(seed=42)
@@ -33,8 +36,7 @@ pmb = pyMBE.pymbe_library(seed=42)
 print ('*** Unit tests: read and write from pyMBE dataframe ***')
 
 # Simulation parameters
-pmb.set_reduced_units(unit_length=0.4*pmb.units.nm,
-                      verbose=False)
+pmb.set_reduced_units(unit_length=0.4*pmb.units.nm)
 
 # Define particles
 pmb.define_particle(
@@ -137,7 +139,18 @@ with tempfile.TemporaryDirectory() as tmp_directory:
     pmb.write_pmb_df (filename = df_filename)
     # Read the same pyMBE df from a csv a load it in pyMBE
     read_df = pmb.read_pmb_df(filename = df_filename)
+    # Write the pyMBE DF to a txt file
+    df_filename_test = f"{tmp_directory}/df-example_molecule.txt"
+    pmb.write_pmb_df (filename = df_filename_test)
+    np.testing.assert_raises(ValueError, pmb.read_pmb_df, df_filename_test)
 
+stored_df['node_map'] = stored_df['node_map'].astype(object)
+stored_df['chain_map'] = stored_df['chain_map'].astype(object)
+stored_df['l0'] = stored_df['l0'].astype(object)
+
+read_df['node_map'] = read_df['node_map'].astype(object)
+read_df['chain_map'] = read_df['chain_map'].astype(object)
+read_df['l0'] = read_df['l0'].astype(object)
 
 # Preprocess data for the Unit Test
 # The espresso bond object must be converted to a dict in order to compare them using assert_frame_equal
@@ -152,4 +165,9 @@ read_df = read_df.replace({pd.NA: np.nan})
 pd.testing.assert_frame_equal(stored_df, 
                                 read_df,
                                 rtol=1e-5)
+print("*** Unit test passed***")
+
+# Test that copy_df_entry raises an error if one provides a non-valid column name
+print("*** Unit test: check that copy_df_entry raises an error if the entry does not exist ***")
+np.testing.assert_raises(ValueError, df_management._DFManagement._copy_df_entry, df = pmb.df, name='test', column_name='non_existing_column',number_of_copies=1)
 print("*** Unit test passed***")

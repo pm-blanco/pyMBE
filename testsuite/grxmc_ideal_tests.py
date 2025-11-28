@@ -29,7 +29,7 @@ import multiprocessing
 import pandas as pd
 import unittest as ut
 
-root = pathlib.Path(__file__).parent.parent.resolve()
+root = pathlib.Path(__file__).parent.parent
 data_root = root / "samples" / "time_series" / "peptide_mixture_grxmc_ideal"
 sample_path = root / "samples" / "peptide_mixture_grxmc_ideal.py"
 analysis_path = root / "samples" / "analyze_time_series.py"

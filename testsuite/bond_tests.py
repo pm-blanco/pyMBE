@@ -21,9 +21,16 @@ import pyMBE
 import numpy as np
 import unittest as ut
 import json.decoder
-import contextlib
 import json
 import io
+import logging
+import pyMBE.storage.df_management as df_management
+
+# Create an in-memory log stream
+log_stream = io.StringIO()
+logging.basicConfig(level=logging.INFO, 
+                    format="%(levelname)s: %(message)s",
+                    handlers=[logging.StreamHandler(log_stream)] )
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -31,7 +38,7 @@ pmb = pyMBE.pymbe_library(seed=42)
 class Test(ut.TestCase):
 
     def setUp(self):
-        pmb.setup_df()
+        pmb.df = df_management._DFManagement._setup_df()
 
     def check_bond_setup(self, bond_object, input_parameters, bond_type):
         """
@@ -84,7 +91,7 @@ class Test(ut.TestCase):
         # check bond deserialization
         bond_params =  bond_object.get_params()
         bond_params["bond_id"] = bond_object._bond_id
-        deserialized = pmb.convert_str_to_bond_object(
+        deserialized = df_management._DFManagement._convert_str_to_bond_object(
             f'{bond_object.__class__.__name__}({json.dumps(bond_params)})')
         self.check_bond_setup(bond_object=deserialized,
                               input_parameters=bond,
@@ -123,7 +130,7 @@ class Test(ut.TestCase):
         # check bond deserialization
         bond_params =  bond_object.get_params()
         bond_params["bond_id"] = bond_object._bond_id
-        deserialized = pmb.convert_str_to_bond_object(
+        deserialized = df_management._DFManagement._convert_str_to_bond_object(
             f'{bond_object.__class__.__name__}({json.dumps(bond_params)})')
         self.check_bond_setup(bond_object=deserialized,
                               input_parameters=bond,
@@ -134,12 +141,11 @@ class Test(ut.TestCase):
         bond = {'k'      : 400 * pmb.units('reduced_energy / reduced_length**2'),
                 'd_r_max': 0.8 * pmb.units.nm}
 
-        with contextlib.redirect_stdout(io.StringIO()) as f:
-            pmb.define_bond(bond_type = bond_type,
+        pmb.define_bond(bond_type = bond_type,
                             bond_parameters = bond,
                             particle_pairs = [['A', 'A']])
-            self.assertEqual(f.getvalue(), 'WARNING: No value provided for r_0. Defaulting to r_0 = 0\n')
-
+        log_contents = log_stream.getvalue()
+        self.assertIn("no value provided for r_0. Defaulting to r_0 = 0", log_contents)  
         bond['r_0'] = 0. * pmb.units.nm
         bond_object = pmb.filter_df(pmb_type='bond')['bond_object'].values[2]
         self.check_bond_setup(bond_object=bond_object,
@@ -240,9 +246,9 @@ class Test(ut.TestCase):
         pmb.define_particle(name='A', z=0, sigma=0.4*pmb.units.nm, epsilon=1*pmb.units('reduced_energy'))
         pmb.define_particle(name='B', z=0, sigma=0.4*pmb.units.nm, epsilon=1*pmb.units('reduced_energy'))
 
-        with contextlib.redirect_stdout(io.StringIO()) as f:
-            pmb.add_bonds_to_espresso(None)
-            self.assertEqual(f.getvalue(), 'WARNING: There are no bonds defined in pymbe.df\n')
+        pmb.add_bonds_to_espresso(None)
+        log_contents = log_stream.getvalue()
+        assert "there are no bonds defined in pymbe.df" in log_contents
 
         bond_type_1 = 'harmonic'
         bond_1 = {'r_0'    : 0.4 * pmb.units.nm,
@@ -272,44 +278,54 @@ class Test(ut.TestCase):
 
         # check deserialization exceptions
         with self.assertRaises(ValueError):
-            pmb.convert_str_to_bond_object('Not_A_Bond()')
+            df_management._DFManagement._convert_str_to_bond_object('Not_A_Bond()')
         with self.assertRaises(json.decoder.JSONDecodeError):
-            pmb.convert_str_to_bond_object('HarmonicBond({invalid_json})')
+            df_management._DFManagement._convert_str_to_bond_object('HarmonicBond({invalid_json})')
         with self.assertRaises(NotImplementedError):
-            pmb.convert_str_to_bond_object('QuarticBond({"r_0": 1., "k": 1.})')
+            df_management._DFManagement._convert_str_to_bond_object('QuarticBond({"r_0": 1., "k": 1.})')
 
         # check bond keys
-        self.assertEqual(pmb.find_bond_key('A', 'A'), 'A-A')
-        self.assertEqual(pmb.find_bond_key('B', 'B'), 'B-B')
-        self.assertEqual(pmb.find_bond_key('A', 'A', use_default_bond=True), 'A-A')
-        self.assertEqual(pmb.find_bond_key('Z', 'Z', use_default_bond=True), 'default')
-        self.assertIsNone(pmb.find_bond_key('A', 'B'))
-        self.assertIsNone(pmb.find_bond_key('B', 'A'))
-        self.assertIsNone(pmb.find_bond_key('Z', 'Z'))
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'A'), 'A-A')
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'B', particle_name2 = 'B'), 'B-B')
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'A', use_default_bond=True), 'A-A')
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'Z', particle_name2 = 'Z', use_default_bond=True), 'default')
+        self.assertIsNone(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'B'))
+        self.assertIsNone(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'B', particle_name2 = 'A'))
+        self.assertIsNone(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'Z', particle_name2 = 'Z'))
+        self.assertEqual(df_management._DFManagement._find_bond_key(df = pmb.df, particle_name1 = 'A', particle_name2 = 'B', use_default_bond=True), 'default')
 
-        # check bond retrieval
-        with contextlib.redirect_stdout(io.StringIO()) as f:
-            self.assertIsNone(pmb.search_bond('A', 'B', hard_check=False))
-            self.assertEqual(f.getvalue(), 'Bond not defined between particles A and B\n')
+        self.assertIsNone(pmb.search_bond('A', 'B', hard_check=False))
+        log_contents = log_stream.getvalue()
+        self.assertIn("Bond not defined between particles A and B", log_contents)
+        
         with self.assertRaises(ValueError):
             pmb.search_bond('A', 'B', use_default_bond=True)
 
+        with self.assertRaises(ValueError):
+            pmb.search_bond('A', 'B' , hard_check=True)
+
         # check invalid bond index
-        pmb.add_value_to_df(key=('particle_id',''), new_value=10,
-                            index=np.where(pmb.df['name']=='A')[0][0])
-        pmb.add_value_to_df(key=('particle_id',''), new_value=20,
-                            index=np.where(pmb.df['name']=='B')[0][0])
-        self.assertIsNone(pmb.add_bond_in_df(10, 20, use_default_bond=False))
-        self.assertIsNone(pmb.add_bond_in_df(10, 20, use_default_bond=True))
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     key = ('particle_id',''), 
+                                                     new_value = 10,
+                                                     index = np.where(pmb.df['name']=='A')[0][0])
+        df_management._DFManagement._add_value_to_df(df = pmb.df,
+                                                     key = ('particle_id',''), 
+                                                     new_value = 20,
+                                                     index = np.where(pmb.df['name']=='B')[0][0])
+        self.assertIsNone(df_management._DFManagement._add_bond_in_df(pmb.df, 10, 20, use_default_bond=False))
+        self.assertIsNone(df_management._DFManagement._add_bond_in_df(pmb.df, 10, 20, use_default_bond=True))
 
         # check bond lengths
         self.assertAlmostEqual(pmb.get_bond_length('A', 'A'),
                                bond_object_1.r_0, delta=1e-7)
         self.assertAlmostEqual(pmb.get_bond_length('B', 'B'),
                                bond_object_2.r_0, delta=1e-7)
-        with contextlib.redirect_stdout(io.StringIO()) as f:
-            self.assertIsNone(pmb.get_bond_length('A', 'B'))
-            self.assertEqual(f.getvalue(), 'Bond not defined between particles A and B\n')
+        self.assertIsNone(pmb.get_bond_length('A', 'B'))
+        log_contents = log_stream.getvalue()
+        self.assertIn("Bond not defined between particles A and B", log_contents)
+        with self.assertRaises(ValueError):
+            pmb.get_bond_length('A', 'B', hard_check=True)
 
 
 if __name__ == '__main__':

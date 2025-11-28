@@ -18,19 +18,21 @@
 
 import logging
 
-def setup_electrostatic_interactions(units, espresso_system, kT, c_salt=None, solvent_permittivity=78.5, method='p3m', tune_p3m=True, accuracy=1e-3,verbose=False):
+def setup_electrostatic_interactions(units, espresso_system, kT, c_salt=None, solvent_permittivity=78.5, method='p3m', tune_p3m=True, accuracy=1e-3, params=None, verbose=False):
     """
     Sets up electrostatic interactions in an ESPResSo system.
 
     Args:
         units(`pint.UnitRegistry`): Unit registry for handling physical units.
-        espresso_system (`espressomd.system.System`): system object of espressomd library.
+        espresso_system(`espressomd.system.System`): system object of espressomd library.
         kT(`pint.Quantity`): Thermal energy.
         c_salt(`pint.Quantity`): Added salt concentration. If provided, the program outputs the debye screening length. It is a mandatory parameter for the Debye-Hückel method.
         solvent_permittivity (`float`): Solvent relative permittivity. Defaults to 78.5, correspoding to its value in water at 298.15 K.
-        method (`str`): Method for computing electrostatic interactions. Defaults to "p3m". 
-        tune_p3m (`bool`): If True, tunes P3M parameters for efficiency. Defaults to True. 
-        accuracy (`float`): Desired accuracy for electrostatics. Defaults to 1e-3.
+        method(`str`): Method for computing electrostatic interactions. Defaults to "p3m". 
+        tune_p3m(`bool`): If True, tunes P3M parameters for efficiency. Defaults to True. 
+        accuracy(`float`): Desired accuracy for electrostatics. Defaults to 1e-3.
+        params(`dict`): Additional parameters for the electrostatic method. For P3M, it can include 'mesh', 'alpha', 'cao' and `r_cut`. For Debye-Hückel, it can include 'r_cut'.
+        verbose(`bool`): If True, enables verbose output for P3M tuning. Defaults to False.
 
     Note:
         `c_salt` is a mandatory argument for setting up the Debye-Hückel electrostatic potential.
@@ -65,12 +67,16 @@ def setup_electrostatic_interactions(units, espresso_system, kT, c_salt=None, so
         
         logging.info(f"Debye kappa {KAPPA.to('nm')} = {KAPPA.to('reduced_length')}")
 
+    if params is None:
+        params = {}
+
     if method == 'p3m':
         logging.debug("*** Setting up Coulomb electrostatics using the P3M method ***")
         coulomb = espressomd.electrostatics.P3M(prefactor = COULOMB_PREFACTOR.m_as("reduced_length * reduced_energy"), 
                                                 accuracy=accuracy,
                                                 verbose=verbose,
-                                                tune=tune_p3m)
+                                                tune=tune_p3m,
+                                                **params)
 
         if tune_p3m:
             espresso_system.time_step=0.01
@@ -78,6 +84,7 @@ def setup_electrostatic_interactions(units, espresso_system, kT, c_salt=None, so
                 espresso_system.actors.add(coulomb)
             else:
                 espresso_system.electrostatics.solver = coulomb
+
 
             # save the optimal parameters and add them by hand
 
@@ -96,9 +103,14 @@ def setup_electrostatic_interactions(units, espresso_system, kT, c_salt=None, so
 
     elif method == 'dh':
         logging.debug("*** Setting up Debye-Hückel electrostatics ***")
+        if params:
+            r_cut = params['r_cut']
+        else:
+            r_cut = 3*KAPPA.to('reduced_length').magnitude
+            
         coulomb = espressomd.electrostatics.DH(prefactor = COULOMB_PREFACTOR.m_as("reduced_length * reduced_energy"), 
                                                kappa = (1./KAPPA).to('1/ reduced_length').magnitude, 
-                                               r_cut = 2.5*KAPPA.to('reduced_length').magnitude)
+                                               r_cut = r_cut)
     if espressomd.version.friendly() == "4.2":
         espresso_system.actors.add(coulomb)
     else:
@@ -106,20 +118,23 @@ def setup_electrostatic_interactions(units, espresso_system, kT, c_salt=None, so
     logging.debug("*** Electrostatics successfully added to the system ***")
     return
 
-def relax_espresso_system(espresso_system, seed,gamma=1, initial_force_cap=50, Nsteps_steepest_descent=5000, max_displacement=0.1, Nmax_iter_relax=100, Nsteps_iter_relax=500):
+def relax_espresso_system(espresso_system, seed, gamma=1e-3, Nsteps_steepest_descent=5000, max_displacement=0.01, Nsteps_iter_relax=500):
     """
     Relaxes the energy of the given ESPResSo system by performing the following steps:
-    (1) Steepest descent energy minimization,
-    (2) Capped Langevin Dynamics run with velocity Verlet integration to relax the system.
+    (1) Steepest descent energy minimization, to remove large forces and relax the system to a local minimum.
+    (2) A Langevin Dynamics run, to further relax the system and ensure that it is in thermal equilibrium.
+
+    This function is useful to avoid code repetition in the sample scripts of pyMBE, but it is by no means general-purpose.
+    Similarly, the default parameters are not universal and should be adapted to the specific system at hand.
+    In general, system relaxation is a complex procedure and should be adapted for each particular application.
+    If you experience crashes or unexpected behavior, please consider using your own relaxation procedure.
 
     Args:
         espresso_system (`espressomd.system.System`): system object of espressomd library.
         seed (`int`): Seed for the random number generator for the thermostat.
-        gamma (`float`, optional): Damping constant for Langevin dynamics. Defaults to  1 reduced length.
-        initial_force_cap (`float`, optional): Initial force cap for steepest descent minimization. Defaults to 50 reduced_energy/reduced_length.
+        gamma (`float`, optional): Starting damping constant for Langevin dynamics. Defaults to  1e-3 reduced time**-1.
         Nsteps_steepest_descent (`int`, optional): Total number of steps for steepest descent minimization. Defaults to 5000.
-        max_displacement (`float`, optional): Maximum particle displacement allowed during minimization. Defaults to 0.1 reduced length.
-        Nmax_iter_relax (`int`, optional): Maximum number of iterations for Langevin dynamics relaxation. Defaults to 100.
+        max_displacement (`float`, optional): Maximum particle displacement allowed during minimization. Defaults to 0.01 reduced length.
         Nsteps_iter_relax (`int`, optional): Number of steps per iteration for Langevin dynamics relaxation. Defaults to 500.
 
     Return:
@@ -132,36 +147,27 @@ def relax_espresso_system(espresso_system, seed,gamma=1, initial_force_cap=50, N
     # Sanity checks
     if gamma <= 0:
         raise ValueError("The damping constant 'gamma' must be positive.")
-    if initial_force_cap <= 0:
-        raise ValueError("The 'initial_force_cap' must be positive.")
     if Nsteps_steepest_descent <= 0 or Nsteps_iter_relax <= 0:
         raise ValueError("Step counts must be positive integers.")
     if max_displacement <= 0:
         raise ValueError("'max_displacement' must be positive.")
-    if Nmax_iter_relax <= 0:
-        raise ValueError("'Nmax_iter_relax' must be positive.")
     logging.debug("*** Relaxing the energy of the system... ***")
-    logging.debug("*** Starting steppest descent minimization ***")
+    logging.debug("*** Starting steepest descent minimization ***")
     espresso_system.thermostat.turn_off()
-    espresso_system.integrator.set_steepest_descent(f_max=initial_force_cap, 
+    espresso_system.integrator.set_steepest_descent(f_max=0,
                                                     gamma=gamma, 
                                                     max_displacement=max_displacement)
     espresso_system.integrator.run(Nsteps_steepest_descent)
-    logging.debug("*** Finished steppest descent minimization ***")
+    logging.debug("*** Finished steepest descent minimization ***")
     logging.debug("*** Starting Langevin Dynamics relaxation ***")
-    espresso_system.force_cap = initial_force_cap
+    
     espresso_system.integrator.set_vv()
-    espresso_system.thermostat.set_langevin(kT= 1, 
-                                            gamma= gamma, 
-                                            seed= seed)
-    for _ in range(Nmax_iter_relax):
-        espresso_system.integrator.run(steps=Nsteps_iter_relax)
-        espresso_system.force_cap *= 1.1 
-    logging.debug("*** Finished steppest descent minimization ***")
-    logging.info(f"*** Minimum particle distance after relaxation: {espresso_system.analysis.min_dist()} ***")
-    # Reset force cap
-    espresso_system.force_cap = 0
+    espresso_system.thermostat.set_langevin(kT=1., gamma=gamma, seed=seed)
+    espresso_system.integrator.run(Nsteps_iter_relax)
     espresso_system.thermostat.turn_off()
+
+    logging.debug("*** Finished Langevin Dynamics relaxation ***")
+    logging.info(f"*** Minimum particle distance after relaxation: {espresso_system.analysis.min_dist()} ***")
     logging.debug("*** Relaxation finished ***")
     return espresso_system.analysis.min_dist()
 

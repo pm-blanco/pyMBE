@@ -30,13 +30,11 @@ def test_arrays_less_equal(arr1, arr2, rtol=1e-7, atol=1e-7):
     rtol (float): Relative tolerance.
     atol (float): Absolute tolerance.
     """
-    try:
-        # Ensure arr1 is less than or equal to arr2 within the given tolerances
-        np.testing.assert_array_less(arr1, arr2 + atol + np.abs(arr2) * rtol)
-        # For equality, use np.minimum to ensure each element in arr1 is not greater than the corresponding element in arr2
-        np.testing.assert_allclose(arr1, np.minimum(arr1, arr2), rtol=rtol, atol=atol)
-    except AssertionError as e:
-        print("Test failed:", e)
+    # Ensure arr1 is less than or equal to arr2 within the given tolerances
+    np.testing.assert_array_less(arr1, arr2 + atol + np.abs(arr2) * rtol)
+    # For equality, use np.minimum to ensure each element in arr1 is not greater than the corresponding element in arr2
+    np.testing.assert_allclose(arr1, np.minimum(arr1, arr2), rtol=rtol, atol=atol)
+
 
 
 print("*** generate_random_points_in_a_sphere unit tests ***")

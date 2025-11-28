@@ -28,11 +28,11 @@ import pyMBE
 pmb = pyMBE.pymbe_library(seed=42)
 
 #Import functions from handy_functions script 
-from lib.handy_functions import setup_electrostatic_interactions
-from lib.handy_functions import relax_espresso_system
-from lib.handy_functions import setup_langevin_dynamics
-from lib.handy_functions import do_reaction
-from lib import analysis
+from pyMBE.lib.handy_functions import setup_electrostatic_interactions
+from pyMBE.lib.handy_functions import relax_espresso_system
+from pyMBE.lib.handy_functions import setup_langevin_dynamics
+from pyMBE.lib.handy_functions import do_reaction
+from pyMBE.lib import analysis
 # Here you can adjust the width of the panda columns displayed when running the code 
 pd.options.display.max_colwidth = 10
 
@@ -50,7 +50,7 @@ parser.add_argument('--pH',
                     required= True,  
                     help='pH value')
 parser.add_argument('--path_to_cg', 
-                    type=str, 
+                    type=Path,
                     required= True,  
                     help='Path to the CG structure of the protein')
 parser.add_argument('--move_protein', 
@@ -70,8 +70,9 @@ parser.add_argument('--mode',
                     help='sets for how long the simulation runs')
 
 parser.add_argument('--output',
-                    type=str,
+                    type=Path,
                     required= False,
+                    default=Path(__file__).parent / "time_series" / "globular_protein",
                     help='output directory')
 
 parser.add_argument('--no_verbose', 
@@ -133,19 +134,16 @@ if args.ideal:
     Electrostatics=False
 
 data_path = args.output
-if data_path is None:
-    data_path=pmb.get_resource(path="samples/Beyer2024/")+"/time_series/globular_protein"
 
 # The trajectories of the simulations will be stored using espresso built-up functions in separed files in the folder 'frames'
-Path(f"{data_path}/frames").mkdir(parents=True, 
-                       exist_ok=True)
+frames_path = args.output / "frames"
+frames_path.mkdir(parents=True, exist_ok=True)
 
 espresso_system = espressomd.System(box_l=[Box_L.to('reduced_length').magnitude] * 3)
 espresso_system.time_step=dt
 espresso_system.cell_system.skin=0.4
 #Reads the VTF file of the protein model
-path_to_cg=pmb.get_resource(args.path_to_cg)
-topology_dict = pmb.read_protein_vtf_in_df (filename=path_to_cg)
+topology_dict = pmb.read_protein_vtf_in_df (filename=args.path_to_cg)
 #Defines the protein in the pmb.df
 pmb.define_protein (name=protein_name, 
                     topology_dict=topology_dict, 
@@ -169,7 +167,7 @@ pmb.define_particle(name = anion_name,
                     offset=ion_size-sigma)
 
 # Here we upload the pka set from the reference_parameters folder
-path_to_pka=pmb.get_resource('parameters/pka_sets/Nozaki1967.json') 
+path_to_pka=pmb.root / "parameters" / "pka_sets" / "Nozaki1967.json"
 pmb.load_pka_set(filename=path_to_pka)
 
 #We create the protein in espresso 
@@ -269,7 +267,7 @@ if verbose:
 
 #Save the initial state 
 n_frame = 0
-with open(f'{data_path}/frames/trajectory'+str(n_frame)+'.vtf', mode='w+t') as coordinates:
+with open(frames_path / f"trajectory{n_frame}.vtf", mode='w+t') as coordinates:
     vtf.writevsf(espresso_system, coordinates)
     vtf.writevcf(espresso_system, coordinates)
 # Setup the potential energy
@@ -342,7 +340,7 @@ for step in tqdm.trange(N_samples, disable=not verbose):
 
     if step % stride_traj == 0 :
         n_frame +=1
-        with open(f'{data_path}/frames/trajectory'+str(n_frame)+'.vtf', mode='w+t') as coordinates:
+        with open(frames_path / f"trajectory{n_frame}.vtf", mode='w+t') as coordinates:
             vtf.writevsf(espresso_system, coordinates)
             vtf.writevcf(espresso_system, coordinates)
 
@@ -356,13 +354,12 @@ for step in tqdm.trange(N_samples, disable=not verbose):
 
 
 
-Path(data_path).mkdir(parents=True, 
-                       exist_ok=True)
+data_path.mkdir(parents=True, exist_ok=True)
     
 time_series=pd.DataFrame(time_series)
 filename=analysis.built_output_name(input_dict=inputs)
 
-time_series.to_csv(f"{data_path}/{filename}_time_series.csv", index=False)
+time_series.to_csv(data_path / f"{filename}_time_series.csv", index=False)
 
 if verbose:
     print("*** DONE ***")

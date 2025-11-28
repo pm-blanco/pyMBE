@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "If you use this software, please cite it using the metadata from this file."
 title: pyMBE
 type: software
-version: 0.8.0
+version: 1.0.0
 authors:
   - given-names: David
     family-names: Beyer
@@ -16,10 +16,10 @@ authors:
     family-names: Pineda
     affiliation: Department of Physical and Macromolecular Chemistry, Charles University, Prague, Czech Republic
     orcid: "https://orcid.org/0000-0001-8270-2476"
-  - given-names: Claudio F.
-    family-names: Narambuena
-    affiliation: Grupo de Bionanotecnologia y Sistemas Complejos. Infap-CONICET & Facultad Regional San Rafael, Universidad Tecnológica Nacional, San Rafael, Argentina
-    orcid: "https://orcid.org/0000-0003-3862-6642"
+  - given-names: Somesh
+    family-names: Kurahatti
+    affiliation: Institute for Computational Physics, University of Stuttgart, Stuttgart, Germany
+    orcid: "https://orcid.org/0009-0003-2098-6583"
   - given-names: Jean-Noël
     family-names: Grad
     affiliation: Institute for Computational Physics, University of Stuttgart, Stuttgart, Germany
@@ -120,9 +120,9 @@ references:
       - family-names: Pineda
         given-names: Sebastian P.
         orcid: "https://orcid.org/0000-0001-8270-2476"
-      - family-names: Narambuena
-        given-names: Claudio F.
-        orcid: "https://orcid.org/0000-0003-3862-6642"
+      - family-names: Kurahatti
+        given-names: Somesh
+        orcid: "https://orcid.org/0009-0003-2098-6583"
       - family-names: Grad
         given-names: Jean-Noël
         orcid: "https://orcid.org/0000-0002-5821-4912"
@@ -132,10 +132,10 @@ references:
       - family-names: Blanco
         given-names: Pablo M.
         orcid: "https://orcid.org/0000-0002-7603-8617"
-    doi: 10.5281/zenodo.12102635
+    doi: 10.5281/zenodo.12102634
     type: software
-    version: 0.8.0
+    version: 1.0.0
     title: pyMBE
-    date-released: "2024-06-18"
+    date-released: "2025-10-08"
     license:
     - GPL-3.0-or-later

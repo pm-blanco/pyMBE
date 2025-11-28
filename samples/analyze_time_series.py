@@ -17,11 +17,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-from lib import analysis
+import pathlib
+from pyMBE.lib import analysis
 
 parser = argparse.ArgumentParser(description='Sample script analyze time series from the other sample scripts using the binning method.')
 parser.add_argument('--data_folder',
-                    type=str,
+                    type=pathlib.Path,
                     required=True,
                     help='path to the data folder with the time series')
 args = parser.parse_args()
@@ -29,5 +30,5 @@ args = parser.parse_args()
 # Read and analyze time series
 analyzed_data=analysis.analyze_time_series(path_to_datafolder=args.data_folder,
                                             ignore_files=["analyzed_data.csv","df.csv"])
-analyzed_data.to_csv(f"{args.data_folder}/analyzed_data.csv", 
+analyzed_data.to_csv(args.data_folder / "analyzed_data.csv",
                         index=False)

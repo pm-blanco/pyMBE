@@ -15,13 +15,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-import sys
 import numpy as np 
 import espressomd
 import pyMBE
 import re
 import json
-from pint import UnitRegistry, Quantity
+import pathlib
+from pint import UnitRegistry
 
 ureg = UnitRegistry()
 
@@ -33,37 +33,22 @@ c_protein =  2e-4 * pmb.units.mol / pmb.units.L
 Box_V =  1. / (pmb.N_A*c_protein)
 Box_L = Box_V**(1./3.) 
 
-def custom_serializer(obj):
-    if isinstance(obj, Quantity):
-        return {"value": obj.magnitude, "unit": str(obj.units)}  
-    raise TypeError(f"Type {type(obj)} not serializable")
-
 def custom_deserializer(dct):
     if "value" in dct and "unit" in dct:
         return ureg.Quantity(dct["value"], dct["unit"])  
     return dct  
 
-mode = "test"
 protein_pdb = '1f6s'
-valid_modes = ["save","test"]
-
-if mode not in valid_modes:
-    raise ValueError(f"mode {mode} not supported, valid modes are {valid_modes}")
 
 print("*** Unit test: check that read_protein_vtf_in_df() loads the protein topology correctly ***")
 
-filename = "testsuite/tests_data/protein_topology_dict.json"
-path_to_cg=pmb.get_resource(f'parameters/globular_proteins/{protein_pdb}.vtf')
+path_to_parfile = pathlib.Path(__file__).parent / "tests_data" / "protein_topology_dict.json"
+path_to_cg=pmb.root / "parameters" / "globular_proteins" / f"{protein_pdb}.vtf"
 topology_dict = pmb.read_protein_vtf_in_df (filename=path_to_cg)
-path_to_parfile=pmb.get_resource(filename)
 
-if mode == "save":
-    with open (path_to_parfile, "w") as output:
-        json.dump(topology_dict, output,default=custom_serializer)
-    sys.exit()
-elif mode == "test":
-    with open (path_to_parfile, "r") as file:
-        load_json = json.load(file,object_hook=custom_deserializer)
+
+with open (path_to_parfile, "r") as file:
+    load_json = json.load(file,object_hook=custom_deserializer)
 
 np.testing.assert_equal(actual= topology_dict, 
                         desired= load_json,
@@ -91,13 +76,6 @@ for aminoacid in topology_dict.keys():
     
     if residue_name not in ['CA', 'n', 'c','Ca']:
         clean_sequence.append(residue_name)
-
-    
-    for index in pmb.df[pmb.df['name']==residue_name].index:
-        if residue_name not in sequence:           
-            np.testing.assert_equal(actual=str(pmb.df.loc[index, "pmb_type"].values[0]), 
-                                desired="particle", 
-                                verbose=True)
 
 residue_list = pmb.define_AA_residues(sequence= clean_sequence,
                                       model = protein_model)
@@ -149,7 +127,7 @@ print("*** Unit test: check that create_protein() creates all the particles in t
 espresso_system=espressomd.System(box_l = [Box_L.to('reduced_length').magnitude] * 3)
 
 # Here we upload the pka set from the reference_parameters folder
-path_to_pka=pmb.get_resource('parameters/pka_sets/Nozaki1967.json') 
+path_to_pka=pmb.root / "parameters" / "pka_sets" / "Nozaki1967.json"
 pmb.load_pka_set(filename=path_to_pka)
 
 pmb.create_protein(name=protein_pdb,
@@ -365,3 +343,113 @@ np.testing.assert_equal(actual=pmb_metal_charge_number_map,
                     desired=metal_charge_number_map, 
                     verbose=True)
 print("*** Unit test passed ***\n")
+
+
+print("*** Unit test: check that define_AA_residues()")
+
+test_sequence = ['c','n', 'G','V', 'I', 'L', 'E', 'Q', 'D', 'N', 'H', 'W', 'F', 'Y', 'R', 'K', 'S', 'T', 'M', 'A', 'G', 'P', 'C' ]
+
+valid_protein_model = ['1beadAA', '2beadAA']
+
+output =['AA-c', 'AA-n', 'AA-G', 'AA-V', 'AA-I', 'AA-L', 'AA-E', 'AA-Q', 'AA-D', 'AA-N', 'AA-H', 'AA-W', 'AA-F', 'AA-Y', 'AA-R', 'AA-K', 'AA-S', 'AA-T', 'AA-M', 'AA-A', 'AA-G', 'AA-P', 'AA-C']
+
+for protein_model in valid_protein_model:
+
+    pmb_residue_list = pmb.define_AA_residues(sequence= test_sequence,
+                                        model = protein_model)
+
+    np.testing.assert_equal(actual=pmb_residue_list, 
+                            desired=output, 
+                            verbose=True)
+
+print("*** Unit test passed ***")
+
+print("*** Unit test: check that define_peptide() raises a ValueError if a wrong model key is provided")
+
+input_parameters = {"name": "generic_peptide",
+                    "sequence": "EEEEEEE",
+                    "model": "3beadAA" }
+
+np.testing.assert_raises(ValueError, pmb.define_peptide, **input_parameters)
+
+input_parameters = {"name": "generic_peptide",
+                    "sequence": "EEEEEEE",
+                    "model": "beadAA" }
+
+np.testing.assert_raises(ValueError, pmb.define_peptide, **input_parameters)
+
+print("*** Unit test passed ***")
+
+print("*** Unit test: check that search_particles_in_residue() returns the correct list of residues")
+
+list_of_residues = ['AA-c', 'AA-n', 'AA-G', 'AA-V', 'AA-I', 'AA-L', 'AA-E', 'AA-Q', 'AA-D', 'AA-N', 'AA-H', 
+                    'AA-W', 'AA-F', 'AA-Y', 'AA-R', 'AA-K', 'AA-S', 'AA-T', 'AA-M', 'AA-A','AA-P', 'AA-C']
+
+for residue_name in list_of_residues:
+
+    residue = residue_name.replace('AA-','')
+
+    list_of_particles_in_residue= pmb.search_particles_in_residue(residue_name = residue_name)
+    if residue in ['c', 'n']:        
+        np.testing.assert_equal(actual=list_of_particles_in_residue, 
+                                desired=[residue], 
+                                verbose=True)
+    elif residue == "G":
+        np.testing.assert_equal(actual=list_of_particles_in_residue, 
+                                desired=[], 
+                                verbose=True)
+    else:
+        np.testing.assert_equal(actual=list_of_particles_in_residue, 
+                                desired=['CA', residue], 
+                                verbose=True)
+        
+                               
+print("*** Unit test passed ***")
+
+print("*** Unit test: check that search_particles_in_residue() returns the correct list of residues for nested residues case")
+
+pmb.define_particle(
+    name = "I",
+    sigma = 1*pmb.units('reduced_length'),
+    epsilon = 1*pmb.units('reduced_energy'))
+    
+# Acidic particle
+pmb.define_particle(
+    name = "A",
+    sigma = 1*pmb.units('reduced_length'),
+    epsilon = 1*pmb.units('reduced_energy'))
+    
+# Basic particle
+pmb.define_particle(
+    name = "B",
+    sigma = 1*pmb.units('reduced_length'),
+    epsilon = 1*pmb.units('reduced_energy'))
+
+pmb.define_residue(
+    name = "Res_1",
+    central_bead = "I",
+    side_chains = ["A","B"])
+    
+pmb.define_residue(
+    name = "Res_2",
+    central_bead = "I",
+    side_chains = ["Res_1"])
+
+list_of_particles_in_residue= pmb.search_particles_in_residue(residue_name = "Res_2")
+
+np.testing.assert_equal(actual=list_of_particles_in_residue, 
+                                desired=['I', 'I', 'A', 'B'], 
+                                verbose=True)
+
+print("*** Unit test passed ***")
+
+print("*** Unit test: Check that create_protein() does not create any protein for an undefined protein name ***")
+starting_number_of_particles=len(espresso_system.part.all())
+pmb.create_protein(name="undefined_protein",
+                    number_of_proteins=1,
+                    espresso_system=espresso_system,
+                    topology_dict=topology_dict)
+np.testing.assert_equal(actual=len(espresso_system.part.all()), 
+                        desired=starting_number_of_particles, 
+                        verbose=True)
+print("*** Unit test passed ***")

@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from lib import analysis
+from pyMBE.lib import analysis
 import sys
 import pathlib
 import tempfile
@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 import unittest as ut
 
-root = pathlib.Path(__file__).parent.parent.resolve()
+root = pathlib.Path(__file__).parent.parent
 data_root = root / "testsuite" / "weak_polyelectrolyte_dialysis_test_data"
 script_path = root / "samples" / "Beyer2024" / "weak_polyelectrolyte_dialysis.py"
 

@@ -27,13 +27,13 @@ import tqdm
 
 # Import pyMBE
 import pyMBE
-from lib import analysis
+from pyMBE.lib import analysis
 #Import functions from handy_functions script 
-from lib.handy_functions import relax_espresso_system
-from lib.handy_functions import setup_electrostatic_interactions
-from lib.handy_functions import setup_langevin_dynamics
-from lib.handy_functions import get_number_of_particles
-from lib.handy_functions import do_reaction
+from pyMBE.lib.handy_functions import relax_espresso_system
+from pyMBE.lib.handy_functions import setup_electrostatic_interactions
+from pyMBE.lib.handy_functions import setup_langevin_dynamics
+from pyMBE.lib.handy_functions import get_number_of_particles
+from pyMBE.lib.handy_functions import do_reaction
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -52,9 +52,9 @@ parser.add_argument('--mode',
                     choices=["ideal", "interacting"],
                     help='Set if an ideal or interacting system is simulated.')
 parser.add_argument('--output',
-                    type=str,
+                    type=Path,
                     required= False,
-                    default="time_series/salt_solution_gcmc",
+                    default=Path(__file__).parent / "time_series" / "salt_solution_gcmc",
                     help='output directory')
 parser.add_argument('--no_verbose', 
                     action='store_false', 
@@ -93,19 +93,30 @@ if verbose:
     print("Created espresso object")
 
 # Add salt
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,cation_name=cation_name,anion_name=anion_name,c_salt=0.5*c_salt_res)
+c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
+                                          cation_name=cation_name,
+                                          anion_name=anion_name,
+                                          c_salt=0.5*c_salt_res)
 if verbose:
     print("Added salt")
 
 # Set up reactions
 if args.mode == "interacting":
-    path_to_ex_pot=pmb.get_resource("testsuite/data/src/")
-    ionic_strength, excess_chemical_potential_monovalent_pairs_in_bulk_data, bjerrums, excess_chemical_potential_monovalent_pairs_in_bulk_data_error =np.loadtxt(f"{path_to_ex_pot}/excess_chemical_potential.dat", unpack=True)
-    excess_chemical_potential_monovalent_pair_interpolated = interpolate.interp1d(ionic_strength, excess_chemical_potential_monovalent_pairs_in_bulk_data)
-    activity_coefficient_monovalent_pair = lambda x: np.exp(excess_chemical_potential_monovalent_pair_interpolated(x.to('1/(reduced_length**3 * N_A)').magnitude))
-    RE = pmb.setup_gcmc(c_salt_res=c_salt_res, salt_cation_name=cation_name, salt_anion_name=anion_name, activity_coefficient=activity_coefficient_monovalent_pair)
+    monovalent_salt_ref_data=pd.read_csv(pmb.root / "parameters" / "salt" / "excess_chemical_potential_excess_pressure.csv")
+    ionic_strength = pmb.units.Quantity(monovalent_salt_ref_data["cs_bulk_[1/sigma^3]"].values, "1/reduced_length**3")
+    excess_chemical_potential = pmb.units.Quantity(monovalent_salt_ref_data["excess_chemical_potential_[kbT]"].values, "reduced_energy")
+    excess_chemical_potential_interpolated = interpolate.interp1d(ionic_strength.m_as("1/reduced_length**3"), 
+                                                                                  excess_chemical_potential.m_as("reduced_energy"))
+    activity_coefficient_monovalent_pair = lambda x: np.exp(excess_chemical_potential_interpolated(x.to('1/(reduced_length**3 * N_A)').magnitude))
+    RE = pmb.setup_gcmc(c_salt_res=c_salt_res, 
+                        salt_cation_name=cation_name,
+                        salt_anion_name=anion_name, 
+                        activity_coefficient=activity_coefficient_monovalent_pair)
 elif args.mode == "ideal":
-    RE = pmb.setup_gcmc(c_salt_res=c_salt_res, salt_cation_name=cation_name, salt_anion_name=anion_name, activity_coefficient=lambda x: 1.0)
+    RE = pmb.setup_gcmc(c_salt_res=c_salt_res, 
+                        salt_cation_name=cation_name, 
+                        salt_anion_name=anion_name, 
+                        activity_coefficient=lambda x: 1.0)
 if verbose:
     print("Set up GCMC...")
 
@@ -118,7 +129,7 @@ print(type_map)
 # Setup the non-interacting type for speeding up the sampling of the reactions
 non_interacting_type = max(type_map.values())+1
 RE.set_non_interacting_type(type=non_interacting_type)
-print('The non interacting type is set to ', non_interacting_type)
+print(f'The non interacting type is set to {non_interacting_type}')
 
 espresso_system.time_step = dt
 # for this example, we use a hard-coded skin value; In general it should be optimized by tuning
@@ -187,14 +198,13 @@ for i in tqdm.trange(N_production_loops, disable=not verbose):
     time_series["c_salt"].append((number_of_ion_pairs/(volume * pmb.N_A)).magnitude)
 
 data_path = args.output
-Path(data_path).mkdir(parents=True, 
-                       exist_ok=True)
+data_path.mkdir(parents=True, exist_ok=True)
 
 time_series=pd.DataFrame(time_series)
 filename=analysis.built_output_name(input_dict=inputs)
 
-time_series.to_csv(f"{data_path}/{filename}_time_series.csv", index=False)
+time_series.to_csv(data_path / f"{filename}_time_series.csv", index=False)
 particle_id_list = pmb.df.loc[~pmb.df['molecule_id'].isna()].particle_id.dropna().to_list()
 
 #Save the pyMBE dataframe in a CSV file
-pmb.write_pmb_df(filename=f'{data_path}/df.csv')
+pmb.write_pmb_df(filename=data_path / "df.csv")

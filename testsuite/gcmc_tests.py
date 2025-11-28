@@ -18,10 +18,11 @@
 
 # Import pyMBE and other libraries
 import sys
+import pathlib
 import tempfile
 import subprocess
 import pyMBE
-from lib import analysis
+from pyMBE.lib import analysis
 import numpy as np
 
 # Template of the test
@@ -51,7 +52,7 @@ def gcmc_test(script_path, mode):
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
 
-script_path=pmb.get_resource("samples/salt_solution_gcmc.py")
+script_path=pathlib.Path(__file__).parent.parent / "samples" / "salt_solution_gcmc.py"
 salt_concentrations=[0.0001, 0.001, 0.01, 0.1]
 
 rtol=0.05 # relative tolerance

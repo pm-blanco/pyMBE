@@ -1,4 +1,4 @@
-
+#
 # Copyright (C) 2024 pyMBE-dev team
 #
 # This file is part of pyMBE.
@@ -15,8 +15,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 
-# Import pyMBE and other libraries
 import pyMBE
 import numpy as np
 import espressomd

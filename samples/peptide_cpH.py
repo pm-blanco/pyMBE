@@ -29,11 +29,11 @@ import argparse
 pmb = pyMBE.pymbe_library(seed=42)
 
 # Load some functions from the handy_scripts library for convenience
-from lib.handy_functions import setup_electrostatic_interactions
-from lib.handy_functions import relax_espresso_system
-from lib.handy_functions import setup_langevin_dynamics
-from lib.handy_functions import do_reaction
-from lib.analysis import built_output_name
+from pyMBE.lib.handy_functions import setup_electrostatic_interactions
+from pyMBE.lib.handy_functions import relax_espresso_system
+from pyMBE.lib.handy_functions import setup_langevin_dynamics
+from pyMBE.lib.handy_functions import do_reaction
+from pyMBE.lib.analysis import built_output_name
 
 parser = argparse.ArgumentParser(description='Sample script to run the pre-made peptide models with pyMBE')
 parser.add_argument('--sequence',
@@ -45,9 +45,9 @@ parser.add_argument('--pH',
                     default=7,
                     help='pH of the solution')
 parser.add_argument('--output',
-                    type=str,
+                    type=Path,
                     required= False,
-                    default="samples/time_series/peptide_cpH",
+                    default=Path(__file__).parent / "time_series" / "peptide_cpH",
                     help='output directory')
 parser.add_argument('--test', 
                     default=False, 
@@ -57,12 +57,11 @@ parser.add_argument('--no_verbose', action='store_false', help="Switch to deacti
 args = parser.parse_args()
 
 # The trajectories of the simulations will be stored using espresso built-up functions in separed files in the folder 'frames'
-Path("./frames").mkdir(parents=True, 
-                       exist_ok=True)
+frames_path = args.output / "frames"
+frames_path.mkdir(parents=True, exist_ok=True)
 
 # Simulation parameters
-pmb.set_reduced_units(unit_length=0.4*pmb.units.nm, 
-                    verbose=False)
+pmb.set_reduced_units(unit_length=0.4*pmb.units.nm)
 pH_value = args.pH
 N_samples = 1000 # to make the demonstration quick, we set this to a very low value
 MD_steps_per_sample = 100 # to make the demonstration quick, we set this to a very low value
@@ -95,8 +94,8 @@ calculated_peptide_concentration = N_peptide_chains/(volume*pmb.N_A)
 
 # Load peptide parametrization from Lunkad, R. et al.  Molecular Systems Design & Engineering (2021), 6(2), 122-131.
 
-path_to_interactions=pmb.get_resource("parameters/peptides/Lunkad2021.json")
-path_to_pka=pmb.get_resource("parameters/pka_sets/Hass2015.json")
+path_to_interactions=pmb.root / "parameters" / "peptides" / "Lunkad2021.json"
+path_to_pka=pmb.root / "parameters" / "pka_sets" / "Hass2015.json"
 pmb.load_interaction_parameters (filename=path_to_interactions) 
 pmb.load_pka_set (path_to_pka)
 
@@ -134,26 +133,24 @@ espresso_system.cell_system.skin=0.4
 pmb.add_bonds_to_espresso(espresso_system=espresso_system)
 
 # Create your molecules into the espresso system
-pmb.create_pmb_object(name=peptide_name, 
-                        number_of_objects= N_peptide_chains,
-                        espresso_system=espresso_system, 
-                        use_default_bond=True)
+pmb.create_molecule(name=peptide_name, 
+                    number_of_molecules=N_peptide_chains,
+                    espresso_system=espresso_system, 
+                    use_default_bond=True)
 # Create counterions for the peptide chains
 pmb.create_counterions(object_name=peptide_name,
                         cation_name=cation_name,
                         anion_name=anion_name,
-                        espresso_system=espresso_system,
-                        verbose=verbose) 
+                        espresso_system=espresso_system) 
 
 # check what is the actual salt concentration in the box
 # if the number of salt ions is a small integer, then the actual and desired salt concentration may significantly differ
 c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                                         cation_name=cation_name,
                                         anion_name=anion_name,
-                                        c_salt=c_salt,
-                                        verbose=verbose)
+                                        c_salt=c_salt)
 
-with open('frames/trajectory0.vtf', mode='w+t') as coordinates:
+with open(frames_path / "trajectory0.vtf", mode='w+t') as coordinates:
     vtf.writevsf(espresso_system, coordinates)
     vtf.writevcf(espresso_system, coordinates)
 
@@ -186,8 +183,7 @@ if not ideal:
     ##Setup the potential energy
     if verbose:
         print('Setup LJ interaction (this can take a few seconds)')
-    pmb.setup_lj_interactions (espresso_system=espresso_system,
-                                warnings=verbose)
+    pmb.setup_lj_interactions (espresso_system=espresso_system)
     if verbose:
         print('Minimize energy before adding electrostatics')
     relax_espresso_system(espresso_system=espresso_system,
@@ -204,7 +200,7 @@ if not ideal:
                           seed=langevin_seed)
 
 if verbose:
-    print('Setup Langeving dynamics')
+    print('Setup Langevin dynamics')
 setup_langevin_dynamics(espresso_system=espresso_system, 
                         kT = pmb.kT, 
                         seed = langevin_seed,
@@ -239,19 +235,17 @@ for sample in tqdm.trange(N_samples):
     time_series["charge"].append(charge_dict["mean"])
     if sample % N_samples_print == 0:
         N_frame+=1
-        with open(f'frames/trajectory{N_frame}.vtf', mode='w+t') as coordinates:
+        with open(frames_path / f"trajectory{N_frame}.vtf", mode='w+t') as coordinates:
             vtf.writevsf(espresso_system, coordinates)
             vtf.writevcf(espresso_system, coordinates)
    
 # Store time series
 
-data_path=pmb.get_resource(path=args.output)
-
-Path(data_path).mkdir(parents=True, 
-                       exist_ok=True)
+data_path=args.output
+data_path.mkdir(parents=True, exist_ok=True)
 time_series=pd.DataFrame(time_series)
 filename=built_output_name(input_dict={"sequence":sequence,"pH":pH_value})
 
-time_series.to_csv(f"{data_path}/{filename}_time_series.csv", index=False)
+time_series.to_csv(data_path / f"{filename}_time_series.csv", index=False)
 
 

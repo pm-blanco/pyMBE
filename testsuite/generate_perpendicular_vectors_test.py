@@ -44,8 +44,9 @@ def check_if_different_perpendicular_vectors_are_generated(vector,magnitude,n=50
                                 verbose = True)
     # Check that the {n} perpendicular vectors are different
     for vector_pair in combinations(perpendicular_vectors, 2):
-        if np.array_equal(vector_pair[0],vector_pair[1]):
-            raise Exception(f"Error: pmb.generate_trial_perpendicular_vector two equal perpendicular vectors v1 = {vector_pair[0]} v2 = {vector_pair[1]}")
+        assert not np.array_equal(vector_pair[0], vector_pair[1]), \
+            f"Error: pmb.generate_trial_perpendicular_vector generated two equal perpendicular vectors v1   = {vector_pair[0]} v2 = {vector_pair[1]}"
+        
     # Check that the perpendicular vectors have the same magnitude as the input magnitude
     for pvector in perpendicular_vectors:
         np.testing.assert_almost_equal(actual = np.linalg.norm(pvector), 
@@ -55,6 +56,11 @@ def check_if_different_perpendicular_vectors_are_generated(vector,magnitude,n=50
 
 
 print("*** generate_trial_perpendicular_vector unit tests ***")
+print("*** Unit test: Check that the function raises a ValueError when provided a zero vector  ***")
+input_parameters={"vector": [0,0,0],
+                   "magnitude":1.0}
+np.testing.assert_raises(ValueError, pmb.generate_trial_perpendicular_vector, **input_parameters)
+print("*** Unit test passed ***")
 print("*** Unit test: Check that the function creates perpendicular vectors to an arbitrary vector of the same magnitude  ***")
 vector = pmb.generate_random_points_in_a_sphere(center=[0,0,0],
                                                 radius=1, 

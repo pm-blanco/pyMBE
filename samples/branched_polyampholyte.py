@@ -26,11 +26,11 @@ from espressomd.io.writer import vtf
 import pyMBE
 
 # Load some functions from the handy_scripts library for convenience
-from lib.handy_functions import setup_langevin_dynamics
-from lib.handy_functions import relax_espresso_system
-from lib.handy_functions import setup_electrostatic_interactions
-from lib.handy_functions import do_reaction
-from lib.analysis import built_output_name
+from pyMBE.lib.handy_functions import setup_langevin_dynamics
+from pyMBE.lib.handy_functions import relax_espresso_system
+from pyMBE.lib.handy_functions import setup_electrostatic_interactions
+from pyMBE.lib.handy_functions import do_reaction
+from pyMBE.lib.analysis import built_output_name
 
 # Create an instance of pyMBE library
 
@@ -43,9 +43,9 @@ parser.add_argument('--pH',
                     default=7,
                     help='pH of the solution')
 parser.add_argument('--output',
-                    type=str,
+                    type=Path,
                     required= False,
-                    default="samples/time_series/branched_polyampholyte",
+                    default=Path(__file__).parent / "time_series" / "branched_polyampholyte",
                     help='output directory')
 parser.add_argument('--test', 
                     default=False, 
@@ -55,8 +55,8 @@ parser.add_argument('--no_verbose', action='store_false', help="Switch to deacti
 args = parser.parse_args()
 
 # The trajectories of the simulations will be stored using espresso built-up functions in separed files in the folder 'frames'
-Path("./frames").mkdir(parents=True, 
-                       exist_ok=True)
+frames_path = args.output / "frames"
+frames_path.mkdir(parents=True, exist_ok=True)
 
 # Simulation parameters
 pH_value = args.pH
@@ -117,7 +117,7 @@ pmb.define_residue(
 # Define the molecule
 pmb.define_molecule(
     name = "polyampholyte",
-    residue_list = 5*["Res_1"] + 5*["Res_2"])
+    residue_list = 2*["Res_1"] + ["Res_2"] + 2*["Res_1"] + 2*["Res_2"])
 
 # Define bonds
 bond_type = 'harmonic'
@@ -158,21 +158,19 @@ espresso_system.cell_system.skin=0.4
 pmb.add_bonds_to_espresso(espresso_system=espresso_system)
 
 # Create your molecules into the espresso system
-pmb.create_pmb_object(name="polyampholyte", 
-                      number_of_objects=N_polyampholyte_chains,
-                      espresso_system=espresso_system, 
-                      use_default_bond=True)
+pmb.create_molecule(name="polyampholyte", 
+                    number_of_molecules=N_polyampholyte_chains,
+                    espresso_system=espresso_system, 
+                    use_default_bond=True)
 pmb.create_counterions(object_name="polyampholyte",
                        cation_name=cation_name,
                        anion_name=anion_name,
-                       espresso_system=espresso_system,
-                       verbose=verbose)
+                       espresso_system=espresso_system)
 
 c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                                           cation_name=cation_name,
                                           anion_name=anion_name,
-                                          c_salt=c_salt,
-                                          verbose=verbose)
+                                          c_salt=c_salt)
 
 #List of ionisable groups
 basic_groups = pmb.df.loc[(~pmb.df['particle_id'].isna()) & (pmb.df['acidity']=='basic')].name.to_list()
@@ -204,8 +202,7 @@ if not ideal:
     ##Setup the potential energy
     if verbose:
         print('Setup LJ interaction (this can take a few seconds)')
-    pmb.setup_lj_interactions (espresso_system=espresso_system,
-                                warnings=verbose)
+    pmb.setup_lj_interactions (espresso_system=espresso_system)
     if verbose:
         print('Minimize energy before adding electrostatics')
     relax_espresso_system(espresso_system=espresso_system,
@@ -241,11 +238,8 @@ for label in ["time","charge"]:
 # Production loop
 N_frame=0
 for step in tqdm.trange(N_samples):
-    
     espresso_system.integrator.run(steps=MD_steps_per_sample)        
-    do_reaction(cpH, steps=total_ionisable_groups)
-
-    
+    do_reaction(cpH, steps=total_ionisable_groups)   
     # Get polyampholyte net charge
     charge_dict=pmb.calculate_net_charge(espresso_system=espresso_system, 
                                         molecule_name="polyampholyte",
@@ -253,17 +247,15 @@ for step in tqdm.trange(N_samples):
     
     time_series["time"].append(espresso_system.time)
     time_series["charge"].append(charge_dict["mean"])
-
     if step % N_samples_print == 0:
         N_frame+=1
-        with open(f'frames/trajectory{N_frame}.vtf', mode='w+t') as coordinates:
+        with open(frames_path / f"trajectory{N_frame}.vtf", mode='w+t') as coordinates:
             vtf.writevsf(espresso_system, coordinates)
             vtf.writevcf(espresso_system, coordinates)
 
 # Store time series
-data_path=pmb.get_resource(path=args.output)
-Path(data_path).mkdir(parents=True, 
-                       exist_ok=True)
+data_path=args.output
+data_path.mkdir(parents=True, exist_ok=True)
 time_series=pd.DataFrame(time_series)
 filename=built_output_name(input_dict={"pH":pH_value})
-time_series.to_csv(f"{data_path}/{filename}_time_series.csv", index=False)
+time_series.to_csv(data_path / f"{filename}_time_series.csv", index=False)

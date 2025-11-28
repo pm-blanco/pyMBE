@@ -1,6 +1,5 @@
 simulation_parameters.txt
 visualization.tcl
-frames
 .ipynb_checkpoints/
 .vscode
 __pycache__

@@ -8,7 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-`lib.handy_functions.setup_langevin_dynamics` now takes `seed` as input argument instead than `SEED` for coherence with the rest of the library. (#118)
+- Methods that interact directly with the pyMBE dataframe are now private and stored in a dedicated module in `storage/df_management`. These methods also have been refactored to be stateless methods, i.e. making it impossible for them to change behavior during the pyMBE object lifetime or for the user to change the pyMBE dataframe unless explicitely calling them. This includes the methods: `add_bond_in_df`, `add_value_to_df`, `assign_molecule_id`, `check_if_df_cell_has_a_value`, `check_if_name_is_defined_in_df`, `check_if_multiple_pmb_types_for_name`, `clean_df_row`, `clean_ids_in_df_row`, `copy_df_entry`, `create_variable_with_units`, `convert_columns_to_original_format`, `convert_str_to_bond_object`, `delete_entries_in_df`, `find_bond_key`, `setup_df`. (#145)
+- `define_particle_entry_in_df` is now a private method in pyMBE, as it is a convenience method for internal use. (#145)
+- The custom `NumpyEncoder` is now a private class in the private module `storage/df_management` because it is  only internally used in pyMBE for serialization/deserialization. (#145)
+
+## [1.0.0] - 2025-10-08
+
+### Changed
+- Parameter sets (pKa values and force field-related parameters) from previous work are now belong to the pyMBE package and are directly accesible from the root path of the package. For example, the path to the Lunkad2021 data set can be accessed as `pmb.root / "parameters" / "peptides" / "Lunkad2021.json"`. (#132)
+- Peptide molecules have now their own pyMBE type pmb_type = "peptide" instead that sharing type with custom molecules pmb_type = "molecule". (#126)
+- Unified exception handling, soft errors and internal information messages are now handled by loggins and hard errors by raise statements. (#126)
+- `lib.handy_functions.setup_langevin_dynamics` now takes `seed` as input argument instead than `SEED` for coherence with the rest of the library. (#118)
 - `pd.NA` is now enforced as value for empty cells in `pmb.df`, this prevents transformation of variable types from `int` to `float` which was breaking the code when reading `pmb.df` from file (See #102). (#116)
 - The sample script `plot_HH.py` has been replaced for specific examples on how to plot data post-processed with pyMBE: `plot_branched_polyampholyte.py`, `plot_peptide.py`, and `plot_peptide_mixture_grxmc_ideal.py`. (#95)
 - Sample scripts now take the pH as an argparse input instead of looping over several pH values. This enables paralization of the sample scripts and avoids conflicts with the current post-processing pipeline. (#95)
@@ -19,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switched to CTest for testing, allowing to run the tests on paralel (#87)
 
 ### Added
+- Case-specific methods to delete particles, residues and molecules in pyMBE: `delete_particle_in_system`, `delete_residue_in_system`, `delete_molecule_in_system`. (#137)
+- Support for conda and miniconda virtual environments. (#134)
+- Private methods for sanity checks, used in various methods to ensure that the inputs are pyMBE objects of the expected type. (#126)
+- New benchmark for hydrogels, including scripts to reproduce the data `samples/Landsgesell2022/run_simulations.py` and `samples/Landsgesell2022/plot_pH_vs_alpha.py` and `samples/Landsgesell2022/plot_P_vs_V.py` (#103)
+- New sample scripts for hydrogels `samples/build_hydrogel.py` and  `samples/weak_polyacid_hydrogel_grxmc.py` (#103)
+- New methods to support building hydrogels with pyMBE `pmb.define_hydrogel`, `pmb.create_hydrogel`, `pmb.initialize_lattice_builder`, `pmb.create_hydrogel_chain`, `pmb.create_hydrogel_node`. (#103)
 - CI testing for functions in `lib.handy_functions`. (#118)
 - sanity tests for `lib.handy_functions`. (#118)
 - Use of `logging`  in `lib.handy_functions` to handle output and error logs. (#118)
@@ -35,7 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unit testing for reaction methods, bonds, object serialization. (#86, #113)
 
 ### Fixed
-- docs in `lib.handy_functions`. (#118)
+- Occassional crashes when the user provided `backbone_vector` as list instead than a `ndarray` in `pmb.create_molecule()`  (#120)
+- Docs in `lib.handy_functions`. (#118)
 - Writing and reading `pmb.df` from file does no longer change the variable type from `int` to `float` when there are empty cells in the column. (#116)
 - Espresso bond objects stored in `pmb.df` now retain the same value for the  `._bond_id` attribute as the original Espresso objects. (#116)
 - Warning handling and coverage in `setup_lj_interaction` (#112)
@@ -51,7 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Unsupported ESPResSo features now raise a `NotImplementedError` instead of a `ValueError`. (#113)
 
 ### Removed
-- `verbose` optional argument has been deprecated in most of pyMBE methods. Now the module `loggins` is used instead for handling pyMBE's logs. (#119)
+- `pmb.destroy_pmb_object` has been deprecated in favor of case-specific deletion methods. (#137)
+- `pmb.create_pmb_object` has been deprecated in favor of case-specific creation methods. (#137)
+- `pmb.get_resource()` is no longer needed because pyMBE has been restructured as a package and therefore all of its resources are internally accessible. (#135)
+- `lib/create_cg_from_pdb.py` because it was not covered by CI testing and it was imposing a too restrictive coarse-graning of globular proteins to be used for the general public. Future development plans include substituting this functunality for a more general parser. (#135)
+- `tutorials/solution_tutorial.ipynb` to avoid code repetition. Instead, the exercise in `pyMBE_tutorial.ipynb` has been adapted to match one of the example in `samples/branched_polyampholyte.py`. (#130)
+- `verbose` optional argument has been deprecated in most of pyMBE methods, except those where is needed to silence verbose from ESPResSo. Now the module `loggins` is used instead for handling pyMBE's logs. (#119)
 - `lib.handy_functions.minimize_espresso_system_energy` because its name was confusing (it was not only minimizing the system energy) and was changing the parameters of the integrator under the hood. (#118)
 - print statements and most of `verbose` in `lib.handy_functions`. (#118)
 - `pmb.parse_sequence_from_file` has been removed since it is no longer necesary to parse the sequence from pmb.df (#110)

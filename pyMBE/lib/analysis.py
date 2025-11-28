@@ -153,27 +153,33 @@ def block_analyze(full_data, n_blocks=16, time_col = "time", equil=0.1,  columns
     
     return result
 
+import re
+
 def built_output_name(input_dict):
     """
     Builts the output name for a given set of input parameters.
-
+    
     Args:
         input_dict(`dict`): dictionary with all terminal inputs.
 
     Returns:
         output_name(`str`): name used for the output files
-
+    
     Note:
         - The standard formatting rule is parametername1_parametervalue1_parametername2_parametervalue2
     """
     output_name=""
     for label in input_dict:
-        if type(input_dict[label]) in [str,bool]:
-            formatted_variable=f"{input_dict[label]:}"
-        else:
-            formatted_variable=f"{input_dict[label]:.3g}"
-        output_name+=f"{label}_{formatted_variable}_"
-    return output_name[:-1]
+        if isinstance(input_dict[label], (str, bool)):
+            formatted_variable = f"{input_dict[label]}"
+        else:  
+            formatted_variable = f"{input_dict[label]:.3g}"
+        
+        formatted_variable = formatted_variable.replace(" ", "_")
+        formatted_variable = re.sub(r"[^\w\-.]", "", formatted_variable)
+        output_name += f"{label}_{formatted_variable}_"
+
+    return output_name.rstrip("_")  # Remove trailing underscore
 
 def get_dt(data, time_col = "time", relative_tolerance = 0.01, verbose = False):
     """ 

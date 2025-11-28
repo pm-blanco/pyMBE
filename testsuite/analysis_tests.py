@@ -18,12 +18,12 @@
 
 import unittest as ut
 import pandas as pd
-import lib.analysis as ana
+import pyMBE.lib.analysis as ana
 import pathlib
 
 
 class Serialization(ut.TestCase):
-    data_root = pathlib.Path(__file__).parent.resolve() / "tests_data"
+    data_root = pathlib.Path(__file__).parent / "tests_data"
 
     def test_analyze_time_series(self):
         print("*** Unit test: test that analysis.analyze_time_series analyzes all data in a folder correctly ***")
