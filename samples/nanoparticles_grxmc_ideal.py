@@ -25,6 +25,8 @@ from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
 from pyMBE.lib.handy_functions import do_reaction
+from pyMBE.storage.df_management import _DFManagement as _DFm
+import numpy as np
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -72,7 +74,7 @@ pH_value= args.pH
 # Nanoparticle parameters
 phi_np          = 0.1			# Volume fraction of the nanoparticle
 np_diameter     = 4			# Diameter of the nanoparticle in reduced units
-surf_den_sites  = 0.2			# Surface density of sites in sites/reduced units^-2
+surf_den_sites  = 0.2			# Surface density of sites in sites/reduced units^2
 pka_acidic_site = 4.0
 pka_basic_site  = 10.0
 
@@ -84,22 +86,23 @@ if args.test:
 
 
 # Defines the components of the nanoparticle (core particle, acidic and basic sites) in the pyMBE data frame
-# Core particle
+
+core_particle = "core_particle"
 pmb.define_particle(
-    name    = "central_particle",
+    name    = "core_particle",
     z       = 0,
     sigma   = np_diameter*pmb.units('reduced_length'),
     epsilon = 1*pmb.units('reduced_energy'))
 
-# Acidic particle
+acidic_site = "acidic_site"
 pmb.define_particle(
     name    = "acidic_site",
     acidity = "acidic",
-    pka     = pka_acidic_patch,
+    pka     = pka_acidic_site,
     sigma   = 1*pmb.units('reduced_length'),
     epsilon = 1*pmb.units('reduced_energy'))
 
-# Basic particle
+basic_site = "basic_site"
 pmb.define_particle(
     name    = "basic_site",
     acidity = "basic",
@@ -109,16 +112,71 @@ pmb.define_particle(
 
 # Define nanoparticle
 
-pmb.define_nanoparticle(name               = "nanoparticle",
-                        core_particle_name = central_particle,
-                        sites_properties   = {"main"     : {"particle_name" = acidic_site,
-                                                            "fraction" = 0.5,
-                                                            "number_of_patches" = 1},
-                                              "secondary": {"particle_name" = basic_site}},
-                        surface_density_of_sites)
+def define_nanoparticle(name, core_particle_name, surface_density_of_sites, sites_distribution):
+        """
+        Defines a pyMBE object of type `nanoparticle` in `pymbe.df`.
 
+        Args:
+            name(`str`): Unique label that identifies the `nanoparticle`.
+            core_particle_name(`str`): `name` of the `particle` to be placed as the core_particle of the `nanoparticle`.
+            surface_density_of_sites(`pint.Quantity`): surface density of sites on the surface of the core_particle, should be expressed in reduced units^-2. Together with the radius of the core_particle, this parameter is used to calculate the total_number_of_sites. 
+            sites_distribution(`dict`): Dictionary containing the distribution of ionizable sites on the surface of the nanoparticle. Currently, nanoparticles can have a maximum of two different kind of sites and only pmb_objects of type `particle` are supported. 
+            The dictionary should have the structure: {"main"     : {"particle_name"     = acidic_site,
+                                                                     "fraction"          = fraction,
+                                                                     "number_of_patches" = n_patches},
+                                                       "secondary": {"particle_name"     = basic_site}} 
+            Here, the "main" sites are located in n="number_of_patches" approximately circular patches over the surface of the core_particle, while the "secondary" ones correspond to the remaining sites around these patches. The parameter "fraction" determines the proportion of the total_number_of_sites that are classified as "main" sites, consequently, (1-fraction) defines the proportion of "secondary" sites.
+            Currently, pyMBE supports nanoparticles with uniformily distributed sites, and the patches are positioned approxiamtely equidistant from one another.  
 
-pmb.create_nanoparticle(name=nanoparticle_name)
+	"""
+        # Sanity checks
+
+        _DFm._check_if_multiple_pmb_types_for_name(name=name,
+                                                   pmb_type_to_be_defined='nanoparticle',
+                                                   df=pmb.df)
+        
+        pmb.check_dimensionality(surface_density_of_sites,"[length]**-2")
+
+        radius                      = pmb.get_radius_map()
+        types                       = pmb.get_type_map()
+        S_sphere                    = 4 * np.pi * radius[types[core_particle_name]]**2
+        N_sites                     = int(S_sphere  * surface_density_of_sites.magnitude)
+        real_surface_charge_density = N_sites / S_sphere
+        number_main_sites           = int(N_sites * sites_distribution['main']['fraction'])
+        real_fraction               = number_main_sites/N_sites
+
+        index = len(pmb.df)
+        pmb.df.at [index,'name']                  = name
+        pmb.df.at [index,'pmb_type']              = 'nanoparticle'
+        pmb.df.at [index,'core_particle']         = core_particle_name,
+        pmb.df.at [index,'surface_density_sites'] = real_surface_charge_density, 
+        pmb.df.at [index,'main_site']             = sites_distribution['main']['particle_name']
+        pmb.df.at [index,'fraction_main_site']    = real_fraction
+        pmb.df.at [index,'number_main_patches']   = sites_distribution['main']['number_of_patches']
+        pmb.df.at [index,'secondary_site']        = sites_distribution['secondary']['particle_name']
+        pmb.df.fillna(pd.NA, inplace=True)
+        return
+
+define_nanoparticle(    name                     = "nanoparticle",
+                        core_particle_name       = core_particle,
+			surface_density_of_sites = surf_den_sites*pmb.units('reduced_length^-2'),
+                        sites_distribution   = {"main"     : {"particle_name"     : acidic_site,
+                                                            "fraction"          : 0.5,
+                                                            "number_of_patches" : 1},
+                                              "secondary": {"particle_name"     : basic_site}},
+)
+
+#Save the pyMBE dataframe in a CSV file
+pmb.write_pmb_df (filename='df.csv')
+
+exit()
+
+#def  create_nanoparticle(name=nanoparticle_name)
+    # Get info about the NP properties from the df
+
+    # Call specific nanoparticle builder depending on the NP properties
+
+#pmb.create_nanoparticle(name=nanoparticle_name)
 
 
 # Solution parameters
