@@ -72,11 +72,27 @@ solvent_permitivity = 78.3
 pH_value= args.pH
 
 # Nanoparticle parameters
-phi_np          = 0.1			# Volume fraction of the nanoparticle
-np_diameter     = 4			# Diameter of the nanoparticle in reduced units
-surf_den_sites  = 0.2			# Surface density of sites in sites/reduced units^2
-pka_acidic_site = 4.0
-pka_basic_site  = 10.0
+vol_frac_of_nanoparticles = 0.1		# Volume fraction of the nanoparticle
+number_of_nanoparticles   = 10          # Total number of the nanoparticles
+nanoparticle_diameter     = 4		# Diameter of the nanoparticle in reduced units
+surface_denstity_of_sites = 0.2		# Surface density of sites in sites/reduced units^2
+pka_A_site                = 4.0
+pka_B_site                = 10.0
+
+# Names for the componentes of the nanoparticles
+
+core_particle = "core_particle"
+A_site        = "A_site"
+B_site        = "B_site"
+
+# Patchy distribution of sites A and B
+
+sites_distribution = {"main"     : {"particle_name"     : A_site,
+                                    "fraction"          : 0.5,
+                                    "number_of_patches" : 1},
+                      "secondary": {"particle_name"     : B_site}}
+
+# Short simulation setup for testing
 
 if args.test: 
     MD_steps_per_sample = 1
@@ -85,28 +101,25 @@ if args.test:
     surf_den_sites      = 0.2	
 
 
-# Defines the components of the nanoparticle (core particle, acidic and basic sites) in the pyMBE data frame
+# Defines the components of the nanoparticle (core particle, A and B type of sites) in the pyMBE data frame
 
-core_particle = "core_particle"
 pmb.define_particle(
-    name    = "core_particle",
+    name    = core_particle,
     z       = 0,
-    sigma   = np_diameter*pmb.units('reduced_length'),
+    sigma   = nanoparticle_diameter*pmb.units('reduced_length'),
     epsilon = 1*pmb.units('reduced_energy'))
 
-acidic_site = "acidic_site"
 pmb.define_particle(
-    name    = "acidic_site",
+    name    = A_site,
     acidity = "acidic",
-    pka     = pka_acidic_site,
+    pka     = pka_A_site,
     sigma   = 1*pmb.units('reduced_length'),
     epsilon = 1*pmb.units('reduced_energy'))
 
-basic_site = "basic_site"
 pmb.define_particle(
-    name    = "basic_site",
+    name    = B_site,
     acidity = "basic",
-    pka     = pka_basic_site,
+    pka     = pka_B_site,
     sigma   = 1*pmb.units('reduced_length'),
     epsilon = 1*pmb.units('reduced_energy'))
 
@@ -121,124 +134,232 @@ def define_nanoparticle(name, core_particle_name, surface_density_of_sites, site
             core_particle_name(`str`): `name` of the `particle` to be placed as the core_particle of the `nanoparticle`.
             surface_density_of_sites(`pint.Quantity`): surface density of sites on the surface of the core_particle, should be expressed in reduced units^-2. Together with the radius of the core_particle, this parameter is used to calculate the total_number_of_sites. 
             sites_distribution(`dict`): Dictionary containing the distribution of ionizable sites on the surface of the nanoparticle. Currently, nanoparticles can have a maximum of two different kind of sites and only pmb_objects of type `particle` are supported. 
-            The dictionary should have the structure: {"main"     : {"particle_name"     = acidic_site,
+            The dictionary should have the structure: {"main"     : {"particle_name"     = A_site,
                                                                      "fraction"          = fraction,
                                                                      "number_of_patches" = n_patches},
-                                                       "secondary": {"particle_name"     = basic_site}} 
+                                                       "secondary": {"particle_name"     = B_site}} 
             Here, the "main" sites are located in n="number_of_patches" approximately circular patches over the surface of the core_particle, while the "secondary" ones correspond to the remaining sites around these patches. The parameter "fraction" determines the proportion of the total_number_of_sites that are classified as "main" sites, consequently, (1-fraction) defines the proportion of "secondary" sites.
             Currently, pyMBE supports nanoparticles with uniformily distributed sites, and the patches are positioned approxiamtely equidistant from one another.  
 
 	"""
         # Sanity checks
+	
+	# Check if there is an existent pyMBE object using the requested name
 
         _DFm._check_if_multiple_pmb_types_for_name(name=name,
                                                    pmb_type_to_be_defined='nanoparticle',
                                                    df=pmb.df)
         
+	# Check if the dimensionality if the surface density of sites is correct
+
         pmb.check_dimensionality(surface_density_of_sites,"[length]**-2")
 
-        radius                      = pmb.get_radius_map()
-        types                       = pmb.get_type_map()
-        S_sphere                    = 4 * np.pi * radius[types[core_particle_name]]**2
-        N_sites                     = int(S_sphere  * surface_density_of_sites.magnitude)
-        real_surface_charge_density = N_sites / S_sphere
-        number_main_sites           = int(N_sites * sites_distribution['main']['fraction'])
-        real_fraction               = number_main_sites/N_sites
+	# Calculatin the total_number_of_sites, number_of_main_sites and number_of_secondary_sites in the nanoparticle surface, and recalculate both the surface density of
+	
+        radius                        = pmb.get_radius_map()
+        types                         = pmb.get_type_map()
+        nanoparticle_surface_area     = 4 * np.pi * (radius[types[core_particle_name]]*pmb.units('reduced_length'))**2
+        nanoparticle_volume           = 4 / 3 * np.pi * (radius[types[core_particle_name]]*pmb.units('reduced_length'))**3
+        total_number_of_sites         = int(nanoparticle_surface_area  * surface_density_of_sites)
+        real_surface_density_of_sites = total_number_of_sites / nanoparticle_surface_area
+        number_main_sites             = int(total_number_of_sites * sites_distribution['main']['fraction'])
+        number_secondary_sites        = total_number_of_sites - number_main_sites
+        real_fraction                 = number_main_sites/total_number_of_sites
 
         index = len(pmb.df)
-        pmb.df.at [index,'name']                  = name
-        pmb.df.at [index,'pmb_type']              = 'nanoparticle'
-        pmb.df.at [index,'core_particle']         = core_particle_name,
-        pmb.df.at [index,'surface_density_sites'] = real_surface_charge_density, 
-        pmb.df.at [index,'main_site']             = sites_distribution['main']['particle_name']
-        pmb.df.at [index,'fraction_main_site']    = real_fraction
-        pmb.df.at [index,'number_main_patches']   = sites_distribution['main']['number_of_patches']
-        pmb.df.at [index,'secondary_site']        = sites_distribution['secondary']['particle_name']
+        pmb.df.at [index,'name']                      = name
+        pmb.df.at [index,'pmb_type']                  = 'nanoparticle'
+        pmb.df.at [index,'core_particle']             = core_particle_name,
+        pmb.df.at [index,'nanoparticle_surface_area'] = nanoparticle_surface_area.magnitude,     #ASK
+        pmb.df.at [index,'nanoparticle_volume']       = nanoparticle_volume.magnitude,           #ASK
+        pmb.df.at [index,'surface_density_sites']     = real_surface_density_of_sites.magnitude, #ASK
+        pmb.df.at [index,'total_number_of_sites']     = total_number_of_sites,
+        pmb.df.at [index,'main_site']                 = sites_distribution['main']['particle_name']
+        pmb.df.at [index,'fraction_main_site']        = real_fraction
+        pmb.df.at [index,'number_main_patches']       = sites_distribution['main']['number_of_patches']
+        pmb.df.at [index,'number_main_sites']         = number_main_sites
+        pmb.df.at [index,'secondary_site']            = sites_distribution['secondary']['particle_name']
+        pmb.df.at [index,'number_secondary_sites']    = number_secondary_sites
         pmb.df.fillna(pd.NA, inplace=True)
         return
 
-define_nanoparticle(    name                     = "nanoparticle",
+
+nanoparticle_name = "nanoparticle"
+define_nanoparticle(    name                     = nanoparticle_name,
                         core_particle_name       = core_particle,
-			surface_density_of_sites = surf_den_sites*pmb.units('reduced_length^-2'),
-                        sites_distribution   = {"main"     : {"particle_name"     : acidic_site,
-                                                            "fraction"          : 0.5,
-                                                            "number_of_patches" : 1},
-                                              "secondary": {"particle_name"     : basic_site}},
-)
+			surface_density_of_sites = surface_denstity_of_sites*pmb.units('reduced_length^-2'),
+                        sites_distribution       = sites_distribution,
+                    )
 
-#Save the pyMBE dataframe in a CSV file
-pmb.write_pmb_df (filename='df.csv')
+# Save the pyMBE dataframe in a CSV file
 
-exit()
+pmb.write_pmb_df (filename='df_before.csv')
 
-#def  create_nanoparticle(name=nanoparticle_name)
-    # Get info about the NP properties from the df
+# Saline solution parameters
 
-    # Call specific nanoparticle builder depending on the NP properties
-
-#pmb.create_nanoparticle(name=nanoparticle_name)
-
-
-# Solution parameters
-c_salt=5e-3 * pmb.units.mol/ pmb.units.L
+c_salt = 5e-3 * pmb.units.mol/ pmb.units.L
 
 if args.mode == 'standard':
-    proton_name = 'Hplus'
+    proton_name    = 'Hplus'
     hydroxide_name = 'OHminus'
-    sodium_name = 'Na'
-    chloride_name = 'Cl'
+    sodium_name    = 'Na'
+    chloride_name  = 'Cl'
 
-    pmb.define_particle(name=proton_name, 
-                        z=1, 
-                        sigma=0.35*pmb.units.nm, 
-                        epsilon=1*pmb.units('reduced_energy'))
-    pmb.define_particle(name=hydroxide_name,  
-                        z=-1, 
-                        sigma=0.35*pmb.units.nm,  
-                        epsilon=1*pmb.units('reduced_energy'))
-    pmb.define_particle(name=sodium_name, 
-                        z=1, 
-                        sigma=0.35*pmb.units.nm, 
-                        epsilon=1*pmb.units('reduced_energy'))
-    pmb.define_particle(name=chloride_name,  
-                        z=-1, 
-                        sigma=0.35*pmb.units.nm,  
-                        epsilon=1*pmb.units('reduced_energy'))
+    pmb.define_particle(name    = proton_name, 
+                        z       = 1, 
+                        sigma   = 0.35*pmb.units.nm, 
+                        epsilon = 1*pmb.units('reduced_energy'))
+    pmb.define_particle(name    = hydroxide_name,  
+                        z       = -1,  
+                        sigma   = 0.35*pmb.units.nm,  
+                        epsilon = 1*pmb.units('reduced_energy'))
+    pmb.define_particle(name    = sodium_name, 
+                        z       = 1, 
+                        sigma   = 0.35*pmb.units.nm, 
+                        epsilon = 1*pmb.units('reduced_energy'))
+    pmb.define_particle(name    = chloride_name,  
+                        z       = -1, 
+                        sigma   = 0.35*pmb.units.nm,  
+                        epsilon = 1*pmb.units('reduced_energy'))
 
 elif args.mode == 'unified':
     cation_name = 'Na'
-    anion_name = 'Cl'
+    anion_name  = 'Cl'
 
-    pmb.define_particle(name=cation_name, 
-                        z=1, 
-                        sigma=0.35*pmb.units.nm, 
-                        epsilon=1*pmb.units('reduced_energy'))
-    pmb.define_particle(name=anion_name,  
-                        z=-1, 
-                        sigma=0.35*pmb.units.nm,  
-                        epsilon=1*pmb.units('reduced_energy'))
-
+    pmb.define_particle(name    = cation_name, 
+                        z       = 1, 
+                        sigma   = 0.35*pmb.units.nm, 
+                        epsilon = 1*pmb.units('reduced_energy'))
+    pmb.define_particle(name    = anion_name,  
+                        z       = -1, 
+                        sigma   = 0.35*pmb.units.nm,  
+                        epsilon = 1*pmb.units('reduced_energy'))
 
 # System parameters
-volume = N_peptide1_chains/(pmb.N_A*pep1_concentration)
-L = volume ** (1./3.) # Side of the simulation box
-calculated_peptide_concentration = N_peptide1_chains/(volume*pmb.N_A)
+
+nanoparticle_index    = np.where(pmb.df['name']==nanoparticle_name)
+nanoparticle_volume   = pmb.df.loc[pmb.df.index[nanoparticle_index]].nanoparticle_volume.values[0]*pmb.units('reduced_length**3')
+volume                = number_of_nanoparticles * nanoparticle_volume / vol_frac_of_nanoparticles
+L                     = volume ** (1./3.) # Side of the simulation box
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
 
-# Add all bonds to espresso system
-pmb.add_bonds_to_espresso(espresso_system=espresso_system)
+espresso_system = espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
 
-# Create your molecules into the espresso system
-pmb.create_molecule(name=peptide1, 
-                    number_of_molecules=N_peptide1_chains,
-                    espresso_system=espresso_system, 
-                    use_default_bond=True)
-pmb.create_molecule(name=peptide2, 
-                    number_of_molecules=N_peptide2_chains,
-                    espresso_system=espresso_system, 
-                    use_default_bond=True)
+# Create nanoparticles
+
+def create_nanoparticle(name, espresso_system, number_of_nanoparticles, position=None, fix=False):
+        """
+        Creates `number_of_nanoparticles` nanoparticles of type `name` into `espresso_system` and bookkeeps them into `pymbe.df`.
+        
+        Args:
+            name(`str`): Label of the nanoparticle type to be created. `name` must be a `nanoparticle` defined in `pmb_df`.  
+            espresso_system(`espressomd.system.System`): Instance of a system object from the espressomd library.
+            number_of_nanoparticles(`int`): Number of nanoparticles to be created.
+            position(list of [`float`,`float`,`float`], optional): Initial positions of the nanoparticles. If not given, nanoparticles are created in random positions. Defaults to None.
+            fix(`bool`, optional): Controls if the nanoparticle motion is frozen in the integrator, it is used to create rigid objects. Defaults to False.
+        Returns:
+            created_pid_list(`list` of `float`): List with the ids of the particles created into `espresso_system`.
+        """ 
+
+        if number_of_nanoparticles <=0:
+            return []
+        if not _DFm._check_if_name_is_defined_in_df(name=name, df=pmb.df):
+            logging.warning(f"Nanoparticle with name '{name}' is not defined in the pyMBE DataFrame, no nanoparticle will be created.")
+            return []
+        pmb._check_if_name_has_right_type(name=name,
+                                           expected_pmb_type="nanoparticle")
+        
+        # Get information from the nanoparticle type `name` from the df
+        
+        radius                 = pmb.get_radius_map()
+        types                  = pmb.get_type_map()
+        core_particle_name     = pmb.df.loc[pmb.df['name'] == name].core_particle.values[0]
+        nanoparticle_radius    = radius[types[core_particle_name]]*pmb.units('reduced_length')
+        main_site              = pmb.df.loc[pmb.df['name'] == name].main_site.values[0]
+        secondary_site         = pmb.df.loc[pmb.df['name'] == name].secondary_site.values[0]
+        total_number_of_sites  = pmb.df.loc[pmb.df['name'] == name].total_number_of_sites.values[0]
+        number_main_patches    = pmb.df.loc[pmb.df['name'] == name].number_main_patches.values[0]
+        number_main_sites      = pmb.df.loc[pmb.df['name'] == name].number_main_sites.values[0]
+        number_secondary_sites = pmb.df.loc[pmb.df['name'] == name].number_secondary_sites.values[0]
+	
+        print(core_particle_name,nanoparticle_radius,main_site,secondary_site,total_number_of_sites,number_main_patches,number_main_sites,number_secondary_sites)
+
+        # Copy the data of the nanoparticle `number_of_nanoparticles` times in the `df`
+
+        pmb.df = _DFm._copy_df_entry(df                = pmb.df,
+                                      name             = name,
+                                      column_name      = 'molecule_id',
+                                      number_of_copies = number_of_nanoparticles)
+
+        # Get a list of the index in `df` corresponding to the new nanoparticles to be created
+        
+        nanoparticle_index      = np.where(pmb.df['name'] == name)
+        nanoparticle_index_list = list(nanoparticle_index[0])[-number_of_nanoparticles:]
+        box_half                = espresso_system.box_l[0] / 2.0
+        for nanoparticle_index in nanoparticle_index_list:     
+            nanoparticle_id      = _DFm._assign_molecule_id(df             = pmb.df,   
+                                                            molecule_index = nanoparticle_index)
+            nanoparticle_center  = pmb.generate_coordinates_outside_sphere(radius    = 1, 
+                                                                           max_dist  = box_half, 
+                                                                           n_samples = 1, 
+                                                                           center    = [box_half]*3)[0]
+            print(nanoparticle_center)
+            input()
+        exit()
+        for nanoparticle_index in nanoparticle_index_list:
+            for residue in topology_dict.keys():
+                residue_name = re.split(r'\d+', residue)[0]
+                residue_number = re.split(r'(\d+)', residue)[1]
+                residue_position = topology_dict[residue]['initial_pos']
+                position = residue_position + protein_center
+                particle_id = self.create_particle(name=residue_name,
+                                                            espresso_system=espresso_system,
+                                                            number_of_particles=1,
+                                                            position=[position], 
+                                                            fix = True)
+                index = self.df[self.df['particle_id']==particle_id[0]].index.values[0]
+                _DFm._add_value_to_df(df = self.df,
+                                      key = ('residue_id',''),
+                                      index = int(index),
+                                      new_value = int(residue_number),
+                                      overwrite = True) 
+                _DFm._add_value_to_df(df = self.df,
+                                      key = ('molecule_id',''),
+                                      index = int(index),
+                                      new_value = molecule_id,
+                                      overwrite = True)
+
+        index = np.where(self.df['name'] == name)
+        index_list = list(index[0])[-number_of_particles:]
+        
+        # Create the new particles into  `espresso_system`
+        
+        created_pid_list=[]
+        for index in range(number_of_particles):
+            df_index = int(index_list[index])
+            _DFm._clean_df_row(df = self.df,
+                               index = df_index)
+            if position is None:
+                particle_position = self.rng.random((1, 3))[0] *np.copy(espresso_system.box_l)
+            else:
+                particle_position = position[index]
+            if len(espresso_system.part.all()) == 0:
+                bead_id = 0
+            else:
+                bead_id = max (espresso_system.part.all().id) + 1
+            created_pid_list.append(bead_id)
+            kwargs = dict(id=bead_id, pos=particle_position, type=es_type, q=z)
+            if fix:
+                kwargs["fix"] = 3 * [fix]
+            espresso_system.part.add(**kwargs)
+            _DFm._add_value_to_df(df = self.df,
+                                  key = ('particle_id',''),
+                                  index = df_index,
+                                  new_value = bead_id)
+        return created_pid_list
+
+create_nanoparticle(name=nanoparticle_name, espresso_system=espresso_system, number_of_nanoparticles=number_of_nanoparticles)
 
 if args.mode == 'standard':
     pmb.create_counterions(object_name=peptide1,
