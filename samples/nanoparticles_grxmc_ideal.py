@@ -75,7 +75,7 @@ pH_value= args.pH
 vol_frac_of_nanoparticles = 0.1		# Volume fraction of the nanoparticle
 number_of_nanoparticles   = 10          # Total number of the nanoparticles
 nanoparticle_diameter     = 4		# Diameter of the nanoparticle in reduced units
-surface_denstity_of_sites = 0.2		# Surface density of sites in sites/reduced units^2
+surface_denstity_of_sites = 0.2  	# Surface density of sites in sites/reduced units^2
 pka_A_site                = 4.0
 pka_B_site                = 10.0
 
@@ -160,26 +160,28 @@ def define_nanoparticle(name, core_particle_name, surface_density_of_sites, site
         types                         = pmb.get_type_map()
         nanoparticle_surface_area     = 4 * np.pi * (radius[types[core_particle_name]]*pmb.units('reduced_length'))**2
         nanoparticle_volume           = 4 / 3 * np.pi * (radius[types[core_particle_name]]*pmb.units('reduced_length'))**3
-        total_number_of_sites         = int(nanoparticle_surface_area  * surface_density_of_sites)
-        print(total_number_of_sites)
+        total_number_of_sites         = int(np.round(nanoparticle_surface_area  * surface_density_of_sites))
         real_surface_density_of_sites = total_number_of_sites / nanoparticle_surface_area
-        number_main_sites             = int(total_number_of_sites * sites_distribution['main']['fraction'])
-        number_secondary_sites        = total_number_of_sites - number_main_sites
-        real_fraction                 = number_main_sites/total_number_of_sites
+        number_main_sites             = int(np.round(total_number_of_sites * sites_distribution['main']['fraction']))
+        number_main_sites_per_patch   = int(np.round(number_main_sites / sites_distribution['main']['number_of_patches']))
+        real_number_main_sites        = number_main_sites_per_patch * sites_distribution['main']['number_of_patches']
+        number_secondary_sites        = total_number_of_sites - real_number_main_sites
+        real_fraction                 = real_number_main_sites/total_number_of_sites
 
         index = len(pmb.df)
-        pmb.df.at [index,'name']                      = name
-        pmb.df.at [index,'pmb_type']                  = 'nanoparticle'
-        pmb.df.at [index,'core_particle']             = core_particle_name,
-        pmb.df.at [index,'nanoparticle_surface_area'] = nanoparticle_surface_area.magnitude,     #ASK
-        pmb.df.at [index,'nanoparticle_volume']       = nanoparticle_volume.magnitude,           #ASK
-        pmb.df.at [index,'surface_density_sites']     = real_surface_density_of_sites.magnitude, #ASK
-        pmb.df.at [index,'total_number_of_sites']     = total_number_of_sites,
-        pmb.df.at [index,'main_site']                 = sites_distribution['main']['particle_name']
-        pmb.df.at [index,'fraction_main_site']        = real_fraction
-        pmb.df.at [index,'number_main_patches']       = sites_distribution['main']['number_of_patches']
-        pmb.df.at [index,'number_main_sites']         = number_main_sites
-        pmb.df.at [index,'secondary_site']            = sites_distribution['secondary']['particle_name']
+        pmb.df.at [index,'name']                        = name
+        pmb.df.at [index,'pmb_type']                    = 'nanoparticle'
+        pmb.df.at [index,'core_particle']               = core_particle_name,
+        pmb.df.at [index,'nanoparticle_surface_area']   = nanoparticle_surface_area.magnitude,    #ASK
+        pmb.df.at [index,'nanoparticle_volume']         = nanoparticle_volume.magnitude,          #ASK
+        pmb.df.at [index,'surface_density_sites']       = real_surface_density_of_sites.magnitude,#ASK
+        pmb.df.at [index,'total_number_of_sites']       = total_number_of_sites,
+        pmb.df.at [index,'main_site']                   = sites_distribution['main']['particle_name']
+        pmb.df.at [index,'fraction_main_site']          = real_fraction
+        pmb.df.at [index,'number_main_patches']         = sites_distribution['main']['number_of_patches']
+        pmb.df.at [index,'number_main_sites_per_patch'] = number_main_sites_per_patch
+        pmb.df.at [index,'number_main_sites']           = real_number_main_sites
+        pmb.df.at [index,'secondary_site']              = sites_distribution['secondary']['particle_name']
         pmb.df.at [index,'number_secondary_sites']    = number_secondary_sites
         pmb.df.fillna(pd.NA, inplace=True)
         return
@@ -345,17 +347,29 @@ def calculate_patch(points,central_point,patch_size):
         site_positions.append((points[index][0],points[index][1],points[index][2]))
     return distance_to_central_point, site_positions
 
+def check_patch_overlaps(sites_positions,number_main_patches):
+    overlapped_sites = []
+    for i in range(number_main_patches-1):
+        for j in range(i + 1, number_main_patches):
+            overlapped_sites.append(set(sites_positions[i]) & set(sites_positions[j]))
+    for overlap in overlapped_sites:
+        if len(overlap) != 0:
+            raise ValueError("The patchies are overlapping in {} sites. Please adjust the angle between them.\n".format(len(overlap)));
+        else:
+            0
+    return 0 
+
 # Create main and secondary patches
  
-def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patches, number_main_sites,tolerance=1e-6, angle_between_patches = 180):
+def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patches, number_main_sites_per_patch, tolerance=1e-6, angle_between_patches = 180):
         """
         Creates a list with the lists of positions for `number_main_patches` of the main sites and the list of positions for the secondary sites, using as origin the coordinates [0,0,0].
 
         Args:
             nanoparticle_radius(`pint.Quantity`): Radius of the nanoparticle expressed in reduced units.
             total_number_of_sites(`int`): Number of total sites on the nanoparticle surface.
-            number_main_sites(`int`): Number of only main sites on the nanoparticle surface.
             number_main_patches(`int`): Number of main sites patches.
+            number_main_sites_per_patch(`int`): Number of sites per main patch.
             tolerance(`float`): Set the tolerance of the numerical method for distributing `total_number_of_sites` in a sphere with radius `nanoparticle_radius`. Defaults = 1e-6.
             angle_between_patches(`float`): If only 2 main patches are defined, this parameter corresponds to the angle between the vectors formed from the center of the nanoparticle and the center of the two patches. Defaults = 180 (the patches are in the poles).
         Returns:
@@ -367,72 +381,65 @@ def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patch
         radius_sites                = (nanoparticle_radius - (1/2)*pmb.units('reduced_length')).magnitude 
         root_edges                  = uniform_distribution_sites_on_sphere(number_of_edges = total_number_of_sites, tolerance=tolerance)
         nanoparticle_edges          = np.multiply(root_edges, radius_sites)
-        number_main_sites_per_patch = int(number_main_sites/number_main_patches,)
         
         if number_main_patches <= 2:
-            initial_edge                = [root_edges[0]]
+            initial_edge                = [nanoparticle_edges[0]]
             sites_positions             = []
-            distances_to_center_site_patch_1, sites_positions_main_patch_1 = calculate_patch(points = root_edges, central_point = initial_edge[0], patch_size    = number_main_sites_per_patch)
+            distances_to_center_site_patch_1, sites_positions_main_patch_1 = calculate_patch(points = nanoparticle_edges, central_point = initial_edge[0], patch_size    = number_main_sites_per_patch)
             sites_positions.append(sites_positions_main_patch_1)
             
             if number_main_patches == 2:
                 distance_omega            = (2 * radius_sites**2 - 2 * radius_sites**2 *np.cos(np.radians(angle_between_patches)))**(1/2)
                 distance_omega_to_patch_1 = list(np.abs(distances_to_center_site_patch_1 - distance_omega))
-                initial_edge.append(root_edges[distance_omega_to_patch_1.index(min(distance_omega_to_patch_1))])
-                distances_to_center_site_patch_2, sites_positions_main_patch_2 = calculate_patch(points = root_edges, central_point = initial_edge[1], patch_size    = number_main_sites_per_patch)
-                
+                initial_edge.append(nanoparticle_edges[distance_omega_to_patch_1.index(min(distance_omega_to_patch_1))])
+                distances_to_center_site_patch_2, sites_positions_main_patch_2 = calculate_patch(points = nanoparticle_edges, central_point = initial_edge[1], patch_size    = number_main_sites_per_patch)
+                sites_positions.append(sites_positions_main_patch_2)
+                print(sites_positions)
                 # Checking that there is no overlapping
-                print(sites_positions_main_patch_1)
-                print(sites_positions_main_patch_2)
-                overlapped_sites = set(sites_positions_main_patch_1) & set(sites_positions_main_patch_2)
-                print(overlapped_sites)
-                if len(overlapped_sites) != 0:
-                    raise ValueError("The patchies are overlapping in {} sites. Please adjust the angle between them.\n".format(len(overlapped_sites))); 
-                else:
-                    sites_positions.append(sites_positions_main_patch_2)
-
-        if number_main_patches > 2:
+                check_patch_overlaps(sites_positions=sites_positions,number_main_patches=number_main_patches)
+        elif number_main_patches > 2:
             sites_positions            = []
             initial_patch_edges        = uniform_distribution_sites_on_sphere(number_of_edges = number_main_patches, tolerance=tolerance)
             initial_patch_scaled_edges = np.multiply(initial_patch_edges, radius_sites)
             initial_edge = []
             for scaled_edge in initial_patch_scaled_edges:
-                comparison_patch_to_nanoparticle = calculate_distance_vector_point(root_edges,scaled_edge)
-                initial_edge.append(root_edges[comparison_patch_to_nanoparticle.index(min(comparison_patch_to_nanoparticle))])
+                comparison_patch_to_nanoparticle = calculate_distance_vector_point(nanoparticle_edges,scaled_edge)
+                initial_edge.append(nanoparticle_edges[comparison_patch_to_nanoparticle.index(min(comparison_patch_to_nanoparticle))])
             for main_patch in range(number_main_patches):
-                distances_to_center_site_patch, sites_positions_main_patch = calculate_patch(points = root_edges, central_point = initial_edge[main_patch], patch_size    = number_main_sites_per_patch)
+                distances_to_center_site_patch, sites_positions_main_patch = calculate_patch(points = nanoparticle_edges, central_point = initial_edge[main_patch], patch_size    = number_main_sites_per_patch)
                 sites_positions.append(sites_positions_main_patch)
 
             # Checking that there is no overlapping
-            overlapped_sites = []
-            for i in range(number_main_patches-1):  
-                for j in range(i + 1, number_main_patches): 
-                    overlapped_sites.append(set(sites_positions[i]) & set(sites_positions[j]))
-            for overlap in overlapped_sites: 
-                if len(overlap) != 0:
-                    raise ValueError("The patchies are overlapping in {} sites. Please adjust the angle between them.\n".format(len(overlap)));
-                else:
-                    0
+            check_patch_overlaps(sites_positions=sites_positions,number_main_patches=number_main_patches)
         else:
             sites_positions = []
+        
+        # Creating the secondary patch with the remaining sites
 
+        total_main_sites_positions = np.vstack(sites_positions) 
+        nanoparticle_edges         = np.asarray(nanoparticle_edges) 
+        print(nanoparticle_edges)
+        # Mask edges that are NOT in used_sites
+        mask = ~np.any(np.all(nanoparticle_edges[:, None, :] == nanoparticle_edges[None, :, :], axis=2), axis=1)
+
+        sites_positions_secondary_patch = nanoparticle_edges[mask]
+        sites_positions.append(list(sites_positions_secondary_patch))
+        print('yes',sites_positions_secondary_patch)
+	# Final report
+
+        counted_total_number_of_sites = 0
+        for patch_index, patch in enumerate(sites_positions):
+            if patch_index < (len(sites_positions)-1):
+                print('Sites in main patch ',patch_index+1,' : ', len(patch))
+                counted_total_number_of_sites += len(patch)
+            else:
+                print('Sites in secondary patch    : ', len(patch))
+                counted_total_number_of_sites += len(patch)
+
+        print('Total main sites      : ', counted_total_number_of_sites)
         return sites_positions
 
 '''
-
-edges_base = edges_seed
-for patchy in edges_acid:
-    edges_base = set(map(tuple, edges_base)).difference(set(patchy))
-edges_base = list(edges_base)
-
-total = 0
-for i, edge_acid in enumerate(edges_acid):
-    print('Sites in patch ',i+1,' : ', len(edge_acid))
-    total += len(edge_acid)
-print('Total acid sites : ', total)
-print('Total basic sites: ', len(edges_base))
-print('Angle separation: ', omega)
-
 ########## Calculating the distances between charges ########
 
 max_dis = (A_np/N_s)**(1/2)
@@ -495,23 +502,24 @@ def create_nanoparticle(name, espresso_system, number_of_nanoparticles, list_cor
         
         # Get information from the nanoparticle type `name` from the df
         
-        radius                    = pmb.get_radius_map()
-        types                     = pmb.get_type_map()
-        core_particle_name        = pmb.df.loc[pmb.df['name'] == name].core_particle.values[0]
-        nanoparticle_radius       = radius[types[core_particle_name]]*pmb.units('reduced_length')
-        main_site                 = pmb.df.loc[pmb.df['name'] == name].main_site.values[0]
-        secondary_site            = pmb.df.loc[pmb.df['name'] == name].secondary_site.values[0]
-        total_number_of_sites     = int(pmb.df.loc[pmb.df['name'] == name].total_number_of_sites.values[0])
-        number_main_patches       = int(pmb.df.loc[pmb.df['name'] == name].number_main_patches.values[0])
-        number_main_sites         = int(pmb.df.loc[pmb.df['name'] == name].number_main_sites.values[0])
-        number_secondary_sites    = int(pmb.df.loc[pmb.df['name'] == name].number_secondary_sites.values[0])
-        nanoparticle_types        = [core_particle_name, main_site, secondary_site]	
-        number_particles_per_type = [number_of_nanoparticles, number_main_sites, number_secondary_sites]
-        nanoparticle_edges = create_patches(nanoparticle_radius   = nanoparticle_radius, 
-                                            total_number_of_sites = total_number_of_sites, 
-                                            number_main_patches   = number_main_patches,
-                                            number_main_sites     = number_main_sites,
-                                            angle_between_patches = 80)
+        radius                      = pmb.get_radius_map()
+        types                       = pmb.get_type_map()
+        core_particle_name          = pmb.df.loc[pmb.df['name'] == name].core_particle.values[0]
+        nanoparticle_radius         = radius[types[core_particle_name]]*pmb.units('reduced_length')
+        main_site                   = pmb.df.loc[pmb.df['name'] == name].main_site.values[0]
+        secondary_site              = pmb.df.loc[pmb.df['name'] == name].secondary_site.values[0]
+        total_number_of_sites       = int(pmb.df.loc[pmb.df['name'] == name].total_number_of_sites.values[0])
+        number_main_patches         = int(pmb.df.loc[pmb.df['name'] == name].number_main_patches.values[0])
+        number_main_sites_per_patch = int(pmb.df.loc[pmb.df['name'] == name].number_main_sites_per_patch.values[0])
+        number_main_sites           = int(pmb.df.loc[pmb.df['name'] == name].number_main_sites.values[0])
+        number_secondary_sites      = int(pmb.df.loc[pmb.df['name'] == name].number_secondary_sites.values[0])
+        nanoparticle_types          = [core_particle_name, main_site, secondary_site]	
+        number_particles_per_type   = [number_of_nanoparticles, number_main_sites, number_secondary_sites]
+        nanoparticle_edges = create_patches(nanoparticle_radius         = nanoparticle_radius, 
+                                            total_number_of_sites       = total_number_of_sites, 
+                                            number_main_patches         = number_main_patches,
+                                            number_main_sites_per_patch = number_main_sites_per_patch,
+                                            angle_between_patches       = 180)
 	
         print(nanoparticle_edges)
         exit()
