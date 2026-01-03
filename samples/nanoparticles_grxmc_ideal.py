@@ -27,6 +27,7 @@ from pyMBE.lib.analysis import built_output_name
 from pyMBE.lib.handy_functions import do_reaction
 from pyMBE.storage.df_management import _DFManagement as _DFm
 import numpy as np
+from scipy.spatial import cKDTree
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -188,15 +189,10 @@ def define_nanoparticle(name, core_particle_name, surface_density_of_sites, site
 
 
 nanoparticle_name = "nanoparticle"
-define_nanoparticle(    name                     = nanoparticle_name,
-                        core_particle_name       = core_particle,
-			surface_density_of_sites = surface_denstity_of_sites*pmb.units('reduced_length^-2'),
-                        sites_distribution       = sites_distribution,
-                    )
-
-# Save the pyMBE dataframe in a CSV file
-
-pmb.write_pmb_df (filename='df_before.csv')
+define_nanoparticle(name                     = nanoparticle_name,
+                    core_particle_name       = core_particle,
+	            surface_density_of_sites = surface_denstity_of_sites*pmb.units('reduced_length^-2'),
+                    sites_distribution       = sites_distribution,)
 
 # Saline solution parameters
 
@@ -334,12 +330,18 @@ def uniform_distribution_sites_on_sphere(number_of_edges=2, tolerance=1e-6):
 # Auxiliary functions to calculate the patchy distribution 
 
 def calculate_distance_vector_point(A,p):
+    """
+    Calculates the distance between a list of vectors and a point [x,y,z]
+    """
     C = []
     for a in A:
         C.append(((a[0] - p[0])**2 + (a[1] - p[1])**2 + (a[2] - p[2])**2)**(1/2))
     return C
 
-def calculate_patch(points,central_point,patch_size):
+def define_patch(points,central_point,patch_size):
+    """
+    Define a patch of `patch_size` number of points from a uniform distribution of points `points`, using as origin `central_point`. 
+    """
     site_positions            = []
     distance_to_central_point = calculate_distance_vector_point(points,central_point)
     points_index              = sorted(range(len(distance_to_central_point)), key=lambda sub: distance_to_central_point[sub])[:patch_size]
@@ -347,10 +349,13 @@ def calculate_patch(points,central_point,patch_size):
         site_positions.append((points[index][0],points[index][1],points[index][2]))
     return distance_to_central_point, site_positions
 
-def check_patch_overlaps(sites_positions,number_main_patches):
+def check_patch_overlaps(sites_positions,number_patches):
+    """
+    Check if there are overlaps between any of the `number_patches` patches stored in `sites_positions`.
+    """
     overlapped_sites = []
-    for i in range(number_main_patches-1):
-        for j in range(i + 1, number_main_patches):
+    for i in range(number_patches-1):
+        for j in range(i + 1, number_patches):
             overlapped_sites.append(set(sites_positions[i]) & set(sites_positions[j]))
     for overlap in overlapped_sites:
         if len(overlap) != 0:
@@ -359,11 +364,55 @@ def check_patch_overlaps(sites_positions,number_main_patches):
             0
     return 0 
 
+def calculate_distances_between_points_on_sphere(points):
+    """
+    Calculates the average, standard deviation and standard error of the euclidean distance between `points` distributed uniformuly on a sphere.
+    """
+    points = np.vstack(points)
+    tree = cKDTree(points)
+    distances, indices = tree.query(points, k=7)  # Assuming 6 neighbors plus the point itself k = 7
+    nearest_neighbors_dist = distances[:, 1]      # Removing self (distance = 0)
+    avg_dis = np.mean(nearest_neighbors_dist)
+    dev_dis = np.std(nearest_neighbors_dist)
+    err_dis = dev_dis / np.sqrt(len(nearest_neighbors_dist))
+    return avg_dis, dev_dis, err_dis
+
+def calculate_dipole_moment(charges, positions):
+    """
+    Calculate the dipole moment for a system of point charges.
+
+     - charges  : List of charge values [q1, q2, ...]
+     - positions: List of position vectors [[x1, y1, z1], [x2, y2, z2], ...]
+    
+    return: Dipole moment vector [px, py, pz] and its magnitude.
+    """
+    dipole_moment = np.sum(np.array(charges)[:, None] * np.array(positions), axis=0)
+    dipole_magnitude = np.linalg.norm(dipole_moment)
+    return dipole_moment, dipole_magnitude
+
+def calculate_quadrupole_moment(charges, positions):
+    """
+    Calculate the quadrupole moment tensor for a system of point charges.
+    
+    - charges: List of charge values [q1, q2, ...]
+     - positions: List of position vectors [[x1, y1, z1], [x2, y2, z2], ...]
+    
+    return: Quadrupole moment tensor (3x3 matrix), its magnitude and its eigenvalues.
+    """
+    Q = np.zeros((3, 3))
+    positions = np.array(positions)
+    for q, r in zip(charges, positions):
+        r_outer = np.outer(r, r)
+        Q += q * (3 * r_outer - np.eye(3) * np.dot(r, r))
+    quadrupole_magnitude = np.linalg.norm(Q)
+    eigenvalues, _ = np.linalg.eigh(Q)
+    return Q, quadrupole_magnitude, eigenvalues
+
 # Create main and secondary patches
  
-def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patches, number_main_sites_per_patch, tolerance=1e-6, angle_between_patches = 180):
+def create_patches(name, nanoparticle_radius, total_number_of_sites, number_main_patches, number_main_sites_per_patch, tolerance=1e-6, angle_between_patches = 180):
         """
-        Creates a list with the lists of positions for `number_main_patches` of the main sites and the list of positions for the secondary sites, using as origin the coordinates [0,0,0].
+        Creates a list with the `number_main_patches` lists of the main sites positions and the list of positions for the secondary sites. The coordinates are generated using [0,0,0] as the center of the nanoparticle.
 
         Args:
             nanoparticle_radius(`pint.Quantity`): Radius of the nanoparticle expressed in reduced units.
@@ -371,9 +420,11 @@ def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patch
             number_main_patches(`int`): Number of main sites patches.
             number_main_sites_per_patch(`int`): Number of sites per main patch.
             tolerance(`float`): Set the tolerance of the numerical method for distributing `total_number_of_sites` in a sphere with radius `nanoparticle_radius`. Defaults = 1e-6.
-            angle_between_patches(`float`): If only 2 main patches are defined, this parameter corresponds to the angle between the vectors formed from the center of the nanoparticle and the center of the two patches. Defaults = 180 (the patches are in the poles).
+            angle_between_patches(`float`): If `number_main_patches` = 2, this parameter corresponds to the angle between the vectors formed from the center of the nanoparticle and the center of the two patches. Defaults = 180 (the patches are in the poles). If `number_main_patches` > 2, the patches are distributed approximately uniformly over the surface. 
+        
         Returns:
-            sites_positions(`list` of `list`): List with the list of the positions of the main and secondary sites in the form: [[sites_positions_main_patch_1],[sites_positions_main_patch_2],...,[sites_positions_secondary_patch]].
+            sites_positions_per_patch(`list` of `list`): List with the list of the positions of the main and secondary sites in the form: [[sites_positions_main_patch_1],[sites_positions_main_patch_2],...,[sites_positions_secondary_patch]].
+        
         Note:
         The sites are created 1/2 of the reduced unit inside of the nanoparticle surface to avoid overlapping of charges due to electrostatic attractions in abcense of excluded volume. 
         """
@@ -384,21 +435,22 @@ def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patch
         
         if number_main_patches <= 2:
             initial_edge                = [nanoparticle_edges[0]]
-            sites_positions             = []
-            distances_to_center_site_patch_1, sites_positions_main_patch_1 = calculate_patch(points = nanoparticle_edges, central_point = initial_edge[0], patch_size    = number_main_sites_per_patch)
-            sites_positions.append(sites_positions_main_patch_1)
+            sites_positions_per_patch   = []
+            distances_to_center_site_patch_1, sites_positions_main_patch_1 = define_patch(points = nanoparticle_edges, central_point = initial_edge[0], patch_size    = number_main_sites_per_patch)
+            sites_positions_per_patch.append(sites_positions_main_patch_1)
             
             if number_main_patches == 2:
                 distance_omega            = (2 * radius_sites**2 - 2 * radius_sites**2 *np.cos(np.radians(angle_between_patches)))**(1/2)
                 distance_omega_to_patch_1 = list(np.abs(distances_to_center_site_patch_1 - distance_omega))
                 initial_edge.append(nanoparticle_edges[distance_omega_to_patch_1.index(min(distance_omega_to_patch_1))])
-                distances_to_center_site_patch_2, sites_positions_main_patch_2 = calculate_patch(points = nanoparticle_edges, central_point = initial_edge[1], patch_size    = number_main_sites_per_patch)
-                sites_positions.append(sites_positions_main_patch_2)
-                print(sites_positions)
-                # Checking that there is no overlapping
-                check_patch_overlaps(sites_positions=sites_positions,number_main_patches=number_main_patches)
+                distances_to_center_site_patch_2, sites_positions_main_patch_2 = define_patch(points = nanoparticle_edges, central_point = initial_edge[1], patch_size    = number_main_sites_per_patch)
+                sites_positions_per_patch.append(sites_positions_main_patch_2)
+                
+                # Checking that there is no overlapping between patches
+                check_patch_overlaps(sites_positions=sites_positions_per_patch,number_patches=number_main_patches)
+        
         elif number_main_patches > 2:
-            sites_positions            = []
+            sites_positions_per_patch  = []
             initial_patch_edges        = uniform_distribution_sites_on_sphere(number_of_edges = number_main_patches, tolerance=tolerance)
             initial_patch_scaled_edges = np.multiply(initial_patch_edges, radius_sites)
             initial_edge = []
@@ -406,75 +458,60 @@ def create_patches(nanoparticle_radius, total_number_of_sites, number_main_patch
                 comparison_patch_to_nanoparticle = calculate_distance_vector_point(nanoparticle_edges,scaled_edge)
                 initial_edge.append(nanoparticle_edges[comparison_patch_to_nanoparticle.index(min(comparison_patch_to_nanoparticle))])
             for main_patch in range(number_main_patches):
-                distances_to_center_site_patch, sites_positions_main_patch = calculate_patch(points = nanoparticle_edges, central_point = initial_edge[main_patch], patch_size    = number_main_sites_per_patch)
-                sites_positions.append(sites_positions_main_patch)
+                distances_to_center_site_patch, sites_positions_main_patch = define_patch(points = nanoparticle_edges, central_point = initial_edge[main_patch], patch_size    = number_main_sites_per_patch)
+                sites_positions_per_patch.append(sites_positions_main_patch)
 
-            # Checking that there is no overlapping
-            check_patch_overlaps(sites_positions=sites_positions,number_main_patches=number_main_patches)
+            # Checking that there is no overlapping between patches
+            check_patch_overlaps(sites_positions=sites_positions_per_patch,number_patches=number_main_patches)
+        
         else:
-            sites_positions = []
+            sites_positions_per_patch = []
         
         # Creating the secondary patch with the remaining sites
-
-        total_main_sites_positions = np.vstack(sites_positions) 
-        nanoparticle_edges         = np.asarray(nanoparticle_edges) 
-        print(nanoparticle_edges)
-        # Mask edges that are NOT in used_sites
-        mask = ~np.any(np.all(nanoparticle_edges[:, None, :] == nanoparticle_edges[None, :, :], axis=2), axis=1)
-
-        sites_positions_secondary_patch = nanoparticle_edges[mask]
-        sites_positions.append(list(sites_positions_secondary_patch))
-        print('yes',sites_positions_secondary_patch)
-	# Final report
+        
+        sites_positions_secondary_patch = nanoparticle_edges
+        for site_position in np.vstack(sites_positions_per_patch):
+            sites_positions_secondary_patch = set(map(tuple, sites_positions_secondary_patch)).difference({tuple(site_position)})
+        sites_positions_per_patch.append(list(sites_positions_secondary_patch))
+	
+        # Final report
 
         counted_total_number_of_sites = 0
-        for patch_index, patch in enumerate(sites_positions):
-            if patch_index < (len(sites_positions)-1):
-                print('Sites in main patch ',patch_index+1,' : ', len(patch))
+        for patch_index, patch in enumerate(sites_positions_per_patch):
+            if patch_index < (len(sites_positions_per_patch)-1):
+                print('Sites in main patch ',patch_index+1,'     : ', len(patch))
                 counted_total_number_of_sites += len(patch)
-            else:
+            else: 
                 print('Sites in secondary patch    : ', len(patch))
                 counted_total_number_of_sites += len(patch)
 
-        print('Total main sites      : ', counted_total_number_of_sites)
-        return sites_positions
+        print('Total sites                 : ', counted_total_number_of_sites)
+        
+        # Calculating the distances between sites        
 
-'''
-########## Calculating the distances between charges ########
+        avg_dis, dev_dis, err_dis = calculate_distances_between_points_on_sphere(points=sites_positions_per_patch)        
+        print('Mean spacing between sites  : ', avg_dis)
+        print('Standard deviation          : ', dev_dis)
+        print('Standard error              : ', err_dis)
 
-max_dis = (A_np/N_s)**(1/2)
-dis = []
-for i in range(len(edges_seed)):
-    if i==0:
-        dis_ind = ((edges_seed[0][0]-edges_seed[-1][0])**2+(edges_seed[0][1]-edges_seed[-1][1])**2+(edges_seed[0][2]-edges_seed[-1][2])**2)**(1/2)
-    if i>=1:
-        dis_ind = ((edges_seed[i-1][0]-edges_seed[i][0])**2+(edges_seed[i-1][1]-edges_seed[i][1])**2+(edges_seed[i-1][2]-edges_seed[i][2])**2)**(1/2)
-    if dis_ind > max_dis.magnitude:
-        dis_ind= dis_ind/2
-    dis.append(dis_ind)
-avg_dis = np.mean(dis)
-dev_dis = np.std(dis)
-err_dis = dev_dis / (len(dis))**(1/2)
+        # Calculating the dipole and quadrupole moments
 
-######## Calculating the dipole and quadrupole moments ######
+        charges                      = pmb.get_charge_number_map()        
+        types                        = pmb.get_type_map()
+        main_sites_name              = pmb.df.loc[pmb.df['name'] == name].main_site.values[0]
+        secondary_sites_name         = pmb.df.loc[pmb.df['name'] == name].secondary_site.values[0]
+        main_sites_charge            = charges[types[main_sites_name]]
+        secondary_site_charges       = charges[types[secondary_sites_name]]
+        total_number_main_sites      = number_main_sites_per_patch*number_main_patches
+        total_number_secondary_sites = total_number_of_sites - total_number_main_sites
+        positions_map                = np.vstack(sites_positions_per_patch)
+        charges_map                  = np.concatenate((np.ones(total_number_main_sites)*main_sites_charge,np.ones(total_number_secondary_sites)*secondary_site_charges))
+        dipole_moment, dipole_magnitude = calculate_dipole_moment(charges_map, positions_map)
+        quadrupole_moment, quadrupole_magnitude, quadrupole_eigenvalues = calculate_quadrupole_moment(charges_map, positions_map)
+        print('Dipole moment magnitude     : ', dipole_magnitude,'in e * reduced length')
+        print('Quadrupole moment magnitude : ', quadrupole_magnitude, 'in e * reduced length**2' )
 
-positions_map = edges_base
-for i in range (len(edges_acid)):
-    positions_map = np.concatenate((positions_map,edges_acid[i]))
-
-charges_map = np.concatenate((np.ones(N_base),-np.ones(N_acid)))
-
-dp_mnt, dp_mag         = aux.calculate_dipole_moment(charges_map, positions_map)
-
-qq_mnt, qd_mag, qd_eig = aux.calculate_quadrupole_moment(charges_map, positions_map)
-
-print('dipole moment magnitude: (sim)'   , dp_mag*ureg('e*sigma'))
-print('dipole moment magnitude: '   , dp_mag*ureg('e*sigma').to('D'))
-
-print('quadrupole moment magnitude: (sim)', qd_mag*ureg('e*sigma**2'))
-print('quadrupole moment magnitude: ', qd_mag*ureg('e*sigma**2').to('D*angstrom'))
-
-'''
+        return sites_positions_per_patch, avg_dis, dev_dis, err_dis, dipole_moment, dipole_magnitude, quadrupole_moment, quadrupole_magnitude, quadrupole_eigenvalues
 
 # Create nanoparticles
 
@@ -515,27 +552,25 @@ def create_nanoparticle(name, espresso_system, number_of_nanoparticles, list_cor
         number_secondary_sites      = int(pmb.df.loc[pmb.df['name'] == name].number_secondary_sites.values[0])
         nanoparticle_types          = [core_particle_name, main_site, secondary_site]	
         number_particles_per_type   = [number_of_nanoparticles, number_main_sites, number_secondary_sites]
-        nanoparticle_edges = create_patches(nanoparticle_radius         = nanoparticle_radius, 
+        sites_positions_per_patch, avg_dis, dev_dis, err_dis, dipole_moment, dipole_magnitude, quadrupole_moment, quadrupole_magnitude, quadrupole_eigenvalues = create_patches(
+                                            name                        = name,
+                                            nanoparticle_radius         = nanoparticle_radius, 
                                             total_number_of_sites       = total_number_of_sites, 
                                             number_main_patches         = number_main_patches,
                                             number_main_sites_per_patch = number_main_sites_per_patch,
                                             angle_between_patches       = 180)
 	
-        print(nanoparticle_edges)
-        exit()
         # Copy the data of the nanoparticle `number_of_nanoparticles` times in the `df`
 
         pmb.df = _DFm._copy_df_entry(df                = pmb.df,
                                       name             = name,
-                                      column_name      = 'molecule_id',
+                                      column_name      = 'molecule_id',           #ASK
                                       number_of_copies = number_of_nanoparticles)
 
         # Get a list of the index in `df` corresponding to the new nanoparticles to be created
         
         nanoparticles_info      = {}
-        nanoparticle_index      = np.where(pmb.df['name'] == name)
-        nanoparticle_index_list = list(nanoparticle_index[0])[-number_of_nanoparticles:]
-        
+        nanoparticle_index_list = list(np.where(pmb.df['name'] == name))[0]
         for core_particle_position_index, nanoparticle_index in enumerate(nanoparticle_index_list):     
             nanoparticle_id      = _DFm._assign_molecule_id(df             = pmb.df,   
                                                             molecule_index = nanoparticle_index)
