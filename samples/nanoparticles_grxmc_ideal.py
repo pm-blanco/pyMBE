@@ -364,7 +364,7 @@ def check_patch_overlaps(sites_positions,number_patches):
             0
     return 0 
 
-def calculate_distances_between_points_on_sphere(points):
+def calculate_distance_between_points_on_sphere(points):
     """
     Calculates the average, standard deviation and standard error of the euclidean distance between `points` distributed uniformuly on a sphere.
     """
@@ -412,7 +412,7 @@ def calculate_quadrupole_moment(charges, positions):
  
 def create_patches(name, nanoparticle_radius, total_number_of_sites, number_main_patches, number_main_sites_per_patch, tolerance=1e-6, angle_between_patches = 180):
         """
-        Creates a list with the `number_main_patches` lists of the main sites positions and the list of positions for the secondary sites. The coordinates are generated using [0,0,0] as the center of the nanoparticle.
+        Creates a list with the `number_main_patches` lists of the main sites positions and the list of positions for the secondary sites. The coordinates are generated using [0,0,0] as the center of the nanoparticle. Prints a final report with the len of each patch. Calculates the distance between sites and the dipole and quadrupole moments. 
 
         Args:
             nanoparticle_radius(`pint.Quantity`): Radius of the nanoparticle expressed in reduced units.
@@ -424,7 +424,10 @@ def create_patches(name, nanoparticle_radius, total_number_of_sites, number_main
         
         Returns:
             sites_positions_per_patch(`list` of `list`): List with the list of the positions of the main and secondary sites in the form: [[sites_positions_main_patch_1],[sites_positions_main_patch_2],...,[sites_positions_secondary_patch]].
-        
+            distance_between_sites(`dict`): Dictionary containing the average, standard deviation and standard error of the distances between sites on the surface of the nanoparticle.  
+            dipole_moment(`dict`): Dictionary containing the vector and magnitude of the dipole moment.
+            quadrupole_moment(`dict`): Dictionary containing the vector, magnitude and eigenvalues of the quadrupole moment.
+
         Note:
         The sites are created 1/2 of the reduced unit inside of the nanoparticle surface to avoid overlapping of charges due to electrostatic attractions in abcense of excluded volume. 
         """
@@ -489,10 +492,13 @@ def create_patches(name, nanoparticle_radius, total_number_of_sites, number_main
         
         # Calculating the distances between sites        
 
-        avg_dis, dev_dis, err_dis = calculate_distances_between_points_on_sphere(points=sites_positions_per_patch)        
-        print('Mean spacing between sites  : ', avg_dis)
-        print('Standard deviation          : ', dev_dis)
-        print('Standard error              : ', err_dis)
+        avg_distance_between_sites, standard_deviation, standard_error = calculate_distance_between_points_on_sphere(points=sites_positions_per_patch)        
+        print('Mean spacing between sites  : ', avg_distance_between_sites)
+        print('Standard deviation          : ', standard_deviation,)
+        print('Standard error              : ', standard_error)
+        distance_between_sites = {"average_distance_between_sites" : avg_distance_between_sites,
+                                  "standard_deviation"             : standard_deviation,
+                                  "standard_error"                 : standard_error}
 
         # Calculating the dipole and quadrupole moments
 
@@ -506,12 +512,17 @@ def create_patches(name, nanoparticle_radius, total_number_of_sites, number_main
         total_number_secondary_sites = total_number_of_sites - total_number_main_sites
         positions_map                = np.vstack(sites_positions_per_patch)
         charges_map                  = np.concatenate((np.ones(total_number_main_sites)*main_sites_charge,np.ones(total_number_secondary_sites)*secondary_site_charges))
-        dipole_moment, dipole_magnitude = calculate_dipole_moment(charges_map, positions_map)
-        quadrupole_moment, quadrupole_magnitude, quadrupole_eigenvalues = calculate_quadrupole_moment(charges_map, positions_map)
+        dipole_vector, dipole_magnitude = calculate_dipole_moment(charges_map, positions_map)
         print('Dipole moment magnitude     : ', dipole_magnitude,'in e * reduced length')
+        dipole_moment = {"dipole_vector"    : dipole_vector,
+                         "dipole_magnitude" : dipole_magnitude}
+        quadrupole_matrix, quadrupole_magnitude, quadrupole_eigenvalues = calculate_quadrupole_moment(charges_map, positions_map)
         print('Quadrupole moment magnitude : ', quadrupole_magnitude, 'in e * reduced length**2' )
+        quadrupole_moment = {"quadrupole_matrix"      : quadrupole_matrix,
+                             "quadrupole_magnitude"   : quadrupole_magnitude,
+                             "quadrupole_eigenvalues" : quadrupole_eigenvalues}
 
-        return sites_positions_per_patch, avg_dis, dev_dis, err_dis, dipole_moment, dipole_magnitude, quadrupole_moment, quadrupole_magnitude, quadrupole_eigenvalues
+        return sites_positions_per_patch, distance_between_sites, dipole_moment, quadrupole_moment
 
 # Create nanoparticles
 
@@ -552,14 +563,17 @@ def create_nanoparticle(name, espresso_system, number_of_nanoparticles, list_cor
         number_secondary_sites      = int(pmb.df.loc[pmb.df['name'] == name].number_secondary_sites.values[0])
         nanoparticle_types          = [core_particle_name, main_site, secondary_site]	
         number_particles_per_type   = [number_of_nanoparticles, number_main_sites, number_secondary_sites]
-        sites_positions_per_patch, avg_dis, dev_dis, err_dis, dipole_moment, dipole_magnitude, quadrupole_moment, quadrupole_magnitude, quadrupole_eigenvalues = create_patches(
+        sites_positions_per_patch, distance_between_sites, dipole_magnitude, quadrupole_moment = create_patches(
                                             name                        = name,
                                             nanoparticle_radius         = nanoparticle_radius, 
                                             total_number_of_sites       = total_number_of_sites, 
                                             number_main_patches         = number_main_patches,
                                             number_main_sites_per_patch = number_main_sites_per_patch,
                                             angle_between_patches       = 180)
-	
+        print(distance_between_sites)
+        print(dipole_magnitude)
+        print(quadrupole_moment)
+
         # Copy the data of the nanoparticle `number_of_nanoparticles` times in the `df`
 
         pmb.df = _DFm._copy_df_entry(df                = pmb.df,
