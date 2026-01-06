@@ -561,8 +561,8 @@ def create_nanoparticle(name, espresso_system, number_of_nanoparticles, list_cor
         number_main_sites_per_patch = int(pmb.df.loc[pmb.df['name'] == name].number_main_sites_per_patch.values[0])
         number_main_sites           = int(pmb.df.loc[pmb.df['name'] == name].number_main_sites.values[0])
         number_secondary_sites      = int(pmb.df.loc[pmb.df['name'] == name].number_secondary_sites.values[0])
-        nanoparticle_types          = [core_particle_name, main_site, secondary_site]	
-        number_particles_per_type   = [number_of_nanoparticles, number_main_sites, number_secondary_sites]
+        sites_types                 = [main_site]*number_main_patches + [secondary_site]	
+        number_sites_per_type       = [number_main_sites_per_patch]*number_main_patches + [number_secondary_sites]
         sites_positions_per_patch, distance_between_sites, dipole_magnitude, quadrupole_moment = create_patches(
                                             name                        = name,
                                             nanoparticle_radius         = nanoparticle_radius, 
@@ -583,18 +583,54 @@ def create_nanoparticle(name, espresso_system, number_of_nanoparticles, list_cor
 
         # Get a list of the index in `df` corresponding to the new nanoparticles to be created
         
-        nanoparticles_info      = {}
         nanoparticle_index_list = list(np.where(pmb.df['name'] == name))[0]
-        for core_particle_position_index, nanoparticle_index in enumerate(nanoparticle_index_list):     
-            nanoparticle_id      = _DFm._assign_molecule_id(df             = pmb.df,   
-                                                            molecule_index = nanoparticle_index)
-            nanoparticles_info[nanoparticle_id] = {}
-            
-            if list_core_particle_positions is None:
-                core_particle_position = None
+        
+        nanoparticles_info      = {}
+        for core_particle_position_index, nanoparticle_index in enumerate(nanoparticle_index_list):
+            nanoparticle_id = _DFm._assign_molecule_id(df             = pmb.df,
+                                                       molecule_index = nanoparticle_index) 
+            # create the principal bead
+            if not list_core_particle_positions:
+                core_particle_id = pmb.create_particle(name                 = core_particle_name,
+                                                        espresso_system     = espresso_system,
+                                                        number_of_particles = 1)[0]
             else:
-                for item in list_core_particle_positions:
-                    core_particle_position = [np.array(list_core_particle_positions[core_particle_position_index])]
+                core_particle_id = pmb.create_particle(name                 = core_particle_name,
+                                                        espresso_system     = espresso_system,
+                                                        position            = [list_core_particle_positions[core_particle_position_index]],
+                                                        number_of_particles = 1)[0]
+            core_particle_position = espresso_system.part.by_id(core_particle_id).pos
+
+            # assigns same molecule_id to the created core_particle_id
+            index = pmb.df[pmb.df['particle_id']==core_particle_id].index.values[0]
+            pmb.df.at [index,'molecule_id'] = nanoparticle_id
+            
+            # Internal bookkeeping of the core_particle_id
+            nanoparticles_info[nanoparticle_id] = {}
+            nanoparticles_info[nanoparticle_id]['core_particle_id'] = core_particle_id 
+            
+            # create the main and secondary sites
+            for index_patch, sites_type in enumerate(sites_types):
+                number_sites    = number_sites_per_type[index_patch]
+                sites_positions = sites_positions_per_patch[index_patch]
+                
+                sites_id = pmb.create_particle(name                = sites_type,
+                                               espresso_system     = espresso_system,
+                                               position            = sites_positions,
+                                               number_of_particles = number_sites)
+                for site_id in sites_id:
+                    index = pmb.df[pmb.df['particle_id']==site_id].index.values[0]
+                    print(index)
+                    print(pmb.df['molecule_id']) 
+                    _DFm._add_value_to_df(df        = pmb.df,
+                                          key       = ('molecule_id',''),
+                                          index     = int(index),
+                                          new_value = nanoparticle_id,
+                                          overwrite = True)
+                #sites_ids.append(sites_id)
+            #nanoparticles_info[nanoparticle_id]['sites_ids'] = sites_ids
+            #print(nanoparticles_info)
+            print(pmb.df['molecule_id'])
             '''
             for index_type, nanoparticle_type in enumerate(nanoparticle_types):
                 particles_info = pmb.create_particle(name                = nanoparticle_type,
@@ -626,7 +662,7 @@ def create_nanoparticle(name, espresso_system, number_of_nanoparticles, list_cor
                     first_residue = False
             '''
  
-create_nanoparticle(name=nanoparticle_name, espresso_system=espresso_system, number_of_nanoparticles=number_of_nanoparticles)
+create_nanoparticle(name=nanoparticle_name, espresso_system=espresso_system, number_of_nanoparticles=number_of_nanoparticles,list_core_particle_positions=None)
 
 if args.mode == 'standard':
     pmb.create_counterions(object_name=peptide1,
