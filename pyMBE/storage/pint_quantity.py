@@ -21,9 +21,10 @@ from dataclasses import dataclass
 import pint
 # dimension -> representative unit used to check dimensionality
 _DIMENSION_REPRESENTATIVE = {"length": "nm",
-                            "energy": "meV",
-                            "energy/length**2": "meV/nm**2",
-                            "dimensionless": "dimensionless",} # extend as needed
+                             "energy": "meV",
+                             "energy/length**2": "meV/nm**2",
+                             "length**-2": "nm**-2",
+                             "dimensionless": "dimensionless",} # extend as needed
 
 @dataclass
 class PintQuantity:

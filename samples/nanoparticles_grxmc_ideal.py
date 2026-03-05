@@ -25,7 +25,6 @@ from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
 from pyMBE.lib.handy_functions import do_reaction
-from pyMBE.storage.df_management import _DFManagement as _DFm
 import numpy as np
 from scipy.spatial import cKDTree
 
@@ -51,7 +50,7 @@ parser.add_argument('--pH',
 parser.add_argument('--output',
                     type=Path,
                     required= False,
-                    default=Path(__file__).parent / "time_series" / "peptide_mixture_grxmc_ideal",
+                    default=Path(__file__).parent / "time_series" / "nanoparticle_mixture_grxmc_ideal",
                     help='output directory')
 parser.add_argument('--no_verbose', action='store_false', help="Switch to deactivate verbose",default=True)
 args = parser.parse_args()
@@ -124,76 +123,37 @@ pmb.define_particle(
     sigma   = 1*pmb.units('reduced_length'),
     epsilon = 1*pmb.units('reduced_energy'))
 
-# Define nanoparticle
-
-def define_nanoparticle(name, core_particle_name, surface_density_of_sites, sites_distribution):
-        """
-        Defines a pyMBE object of type `nanoparticle` in `pymbe.df`.
-
-        Args:
-            name(`str`): Unique label that identifies the `nanoparticle`.
-            core_particle_name(`str`): `name` of the `particle` to be placed as the core_particle of the `nanoparticle`.
-            surface_density_of_sites(`pint.Quantity`): surface density of sites on the surface of the core_particle, should be expressed in reduced units^-2. Together with the radius of the core_particle, this parameter is used to calculate the total_number_of_sites. 
-            sites_distribution(`dict`): Dictionary containing the distribution of ionizable sites on the surface of the nanoparticle. Currently, nanoparticles can have a maximum of two different kind of sites and only pmb_objects of type `particle` are supported. 
-            The dictionary should have the structure: {"main"     : {"particle_name"     = A_site,
-                                                                     "fraction"          = fraction,
-                                                                     "number_of_patches" = n_patches},
-                                                       "secondary": {"particle_name"     = B_site}} 
-            Here, the "main" sites are located in n="number_of_patches" approximately circular patches over the surface of the core_particle, while the "secondary" ones correspond to the remaining sites around these patches. The parameter "fraction" determines the proportion of the total_number_of_sites that are classified as "main" sites, consequently, (1-fraction) defines the proportion of "secondary" sites.
-            Currently, pyMBE supports nanoparticles with uniformily distributed sites, and the patches are positioned approxiamtely equidistant from one another.  
-
-	"""
-        # Sanity checks
-	
-	# Check if there is an existent pyMBE object using the requested name
-
-        _DFm._check_if_multiple_pmb_types_for_name(name=name,
-                                                   pmb_type_to_be_defined='nanoparticle',
-                                                   df=pmb.df)
-        
-	# Check if the dimensionality if the surface density of sites is correct
-
-        pmb.check_dimensionality(surface_density_of_sites,"[length]**-2")
-
-	# Calculatin the total_number_of_sites, number_of_main_sites and number_of_secondary_sites in the nanoparticle surface, and recalculate both the surface density of
-	
-        radius                        = pmb.get_radius_map()
-        types                         = pmb.get_type_map()
-        nanoparticle_surface_area     = 4 * np.pi * (radius[types[core_particle_name]]*pmb.units('reduced_length'))**2
-        nanoparticle_volume           = 4 / 3 * np.pi * (radius[types[core_particle_name]]*pmb.units('reduced_length'))**3
-        total_number_of_sites         = int(np.round(nanoparticle_surface_area  * surface_density_of_sites))
-        real_surface_density_of_sites = total_number_of_sites / nanoparticle_surface_area
-        number_main_sites             = int(np.round(total_number_of_sites * sites_distribution['main']['fraction']))
-        number_main_sites_per_patch   = int(np.round(number_main_sites / sites_distribution['main']['number_of_patches']))
-        real_number_main_sites        = number_main_sites_per_patch * sites_distribution['main']['number_of_patches']
-        number_secondary_sites        = total_number_of_sites - real_number_main_sites
-        real_fraction                 = real_number_main_sites/total_number_of_sites
-
-        index = len(pmb.df)
-        pmb.df.at [index,'name']                        = name
-        pmb.df.at [index,'pmb_type']                    = 'nanoparticle'
-        pmb.df.at [index,'core_particle']               = core_particle_name,
-        pmb.df.at [index,'nanoparticle_surface_area']   = nanoparticle_surface_area.magnitude,    #ASK
-        pmb.df.at [index,'nanoparticle_volume']         = nanoparticle_volume.magnitude,          #ASK
-        pmb.df.at [index,'surface_density_sites']       = real_surface_density_of_sites.magnitude,#ASK
-        pmb.df.at [index,'total_number_of_sites']       = total_number_of_sites,
-        pmb.df.at [index,'main_site']                   = sites_distribution['main']['particle_name']
-        pmb.df.at [index,'fraction_main_site']          = real_fraction
-        pmb.df.at [index,'number_main_patches']         = sites_distribution['main']['number_of_patches']
-        pmb.df.at [index,'number_main_sites_per_patch'] = number_main_sites_per_patch
-        pmb.df.at [index,'number_main_sites']           = real_number_main_sites
-        pmb.df.at [index,'secondary_site']              = sites_distribution['secondary']['particle_name']
-        pmb.df.at [index,'number_secondary_sites']    = number_secondary_sites
-        pmb.df.fillna(pd.NA, inplace=True)
-        return
 
 
 nanoparticle_name = "nanoparticle"
-define_nanoparticle(name                     = nanoparticle_name,
-                    core_particle_name       = core_particle,
-	            surface_density_of_sites = surface_denstity_of_sites*pmb.units('reduced_length^-2'),
-                    sites_distribution       = sites_distribution,)
+pmb.define_nanoparticle(name                     = nanoparticle_name,
+                        core_particle_name       = core_particle,
+	                    surface_density_of_sites = surface_denstity_of_sites*pmb.units('reduced_length^-2'),
+                        primary_site_particle_name = A_site,
+                        fraction_primary_sites = sites_distribution["main"]["fraction"],
+                        number_of_patches_of_primary_sites = sites_distribution["main"]["number_of_patches"],
+                        secondary_site_particle_name = B_site)
 
+nanoparticle_tpl_1 = pmb.db.get_template(name=nanoparticle_name, pmb_type="nanoparticle")
+
+properties_1 = nanoparticle_tpl_1.calculate_nanoparticle_properties(pmb)
+
+
+pmb.save_database(args.output / "database")
+
+
+pmb2 = pyMBE.pymbe_library(seed=42)
+
+pmb2.load_database(args.output / "database")
+nanoparticle_tpl_2 = pmb2.db.get_template(name=nanoparticle_name, pmb_type="nanoparticle")
+
+properties_2 = nanoparticle_tpl_2.calculate_nanoparticle_properties(pmb2)
+
+print(nanoparticle_tpl_1.surface_density_of_sites.to_quantity(pmb.units).to("nm^-2"), nanoparticle_tpl_2.surface_density_of_sites.to_quantity(pmb2.units).to("nm^-2"))
+
+print(properties_1["real_surface_density_of_sites"].to(pmb.units('nm^-2')), properties_2["real_surface_density_of_sites"].to(pmb2.units('nm^-2')))
+print(properties_1["real_surface_density_of_sites"].m_as(pmb.units('nm^-2')))
+exit()
 # Saline solution parameters
 
 c_salt = 5e-3 * pmb.units.mol/ pmb.units.L

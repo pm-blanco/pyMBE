@@ -36,6 +36,7 @@ from pyMBE.storage.templates.molecule import MoleculeTemplate
 from pyMBE.storage.templates.peptide import PeptideTemplate
 from pyMBE.storage.templates.protein import ProteinTemplate
 from pyMBE.storage.templates.hydrogel import HydrogelTemplate, HydrogelNode, HydrogelChain
+from pyMBE.storage.templates.nanoparticle import NanoparticleTemplate
 from pyMBE.storage.templates.bond import BondTemplate
 from pyMBE.storage.templates.lj import LJInteractionTemplate
 ## Instances
@@ -46,6 +47,7 @@ from pyMBE.storage.instances.peptide import PeptideInstance
 from pyMBE.storage.instances.protein import ProteinInstance
 from pyMBE.storage.instances.bond import BondInstance
 from pyMBE.storage.instances.hydrogel import HydrogelInstance
+from pyMBE.storage.instances.nanoparticle import NanoparticleInstance
 ## Reactions
 from pyMBE.storage.reactions.reaction import Reaction, ReactionParticipant
 # Utilities
@@ -1492,6 +1494,48 @@ class pymbe_library():
                                node_map=nodes,
                                chain_map=chains)
         self.db._register_template(tpl)
+
+    def define_nanoparticle(self, name, core_particle_name, surface_density_of_sites, primary_site_particle_name, fraction_primary_sites, number_of_patches_of_primary_sites, secondary_site_particle_name=None):
+        """
+        Defines a nanoparticle template and creates one nanoparticle instance
+        in the pyMBE database.
+
+        Args:
+            name ('str'):
+                Unique label that identifies the nanoparticle template.
+
+            core_particle_name ('str'):
+                Name of the particle template used as the nanoparticle core.
+
+            surface_density_of_sites ('pint.Quantity'):
+                Surface density of sites on the nanoparticle surface.
+                Must have dimensionality ``[length]**-2``.
+
+            primary_site_particle_name ('str'):
+                Particle template used for the primary site type.
+
+            fraction_primary_sites ('float'):
+                Fraction of sites assigned to the primary site type.
+
+            number_of_patches_of_primary_sites ('int'):
+                Number of primary-site patches on the nanoparticle surface.
+
+            secondary_site_particle_name ('str', optional):
+                Optional particle template used for a secondary site type.
+                Defaults to None.
+
+        """
+        tpl = NanoparticleTemplate(name=name,
+                                   core_particle_name=core_particle_name,
+                                   surface_density_of_sites=PintQuantity.from_quantity(q=surface_density_of_sites,
+                                                                                       expected_dimension="length**-2",
+                                                                                       ureg=self.units),
+                                   primary_site_particle_name=primary_site_particle_name,
+                                   fraction_primary_sites=fraction_primary_sites,
+                                   number_of_patches_of_primary_sites=number_of_patches_of_primary_sites,
+                                   secondary_site_particle_name=secondary_site_particle_name)
+        self.db._register_template(tpl)
+
 
     def define_molecule(self, name, residue_list):
         """
@@ -3214,4 +3258,3 @@ class pymbe_library():
                                                                                   ureg=self.units),
                                                 shift=shift_tpl)
             self.db._register_template(lj_template)
-
