@@ -149,6 +149,12 @@ class Manager:
         if pmb_type in self._molecule_like_types:
             tpl = self.get_template(name=name, 
                                     pmb_type=pmb_type)
+            if pmb_type == "nanoparticle":
+                counts[tpl.core_particle_name] += 1
+                counts[tpl.primary_site_particle_name] += 1
+                if tpl.secondary_site_particle_name is not None:
+                    counts[tpl.secondary_site_particle_name] += 1
+                return counts
             for res_name in tpl.residue_list:
                 sub = self._collect_particle_templates(name=res_name,
                                                        pmb_type="residue")
@@ -445,7 +451,7 @@ class Manager:
             iid = instance.assembly_id
         elif isinstance(instance, NanoparticleInstance):
             pmb_type = "nanoparticle"
-            iid = instance.assembly_id
+            iid = instance.molecule_id
         else:
             raise TypeError("Unsupported instance type")
         self._instances.setdefault(pmb_type, {})

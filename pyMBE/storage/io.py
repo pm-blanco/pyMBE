@@ -329,9 +329,12 @@ def _load_database_csv(db, folder):
                                         assembly_id=int(row["assembly_id"]))
                 instances[inst.assembly_id] = inst
             elif pmb_type == "nanoparticle":
+                molecule_val = row.get("molecule_id", "") or ""
+                assembly_val = row.get("assembly_id", "") or ""
                 inst = NanoparticleInstance(name=row["name"],
-                                            assembly_id=int(row["assembly_id"]))
-                instances[inst.assembly_id] = inst
+                                            molecule_id=int(molecule_val),
+                                            assembly_id=None if assembly_val == "" else int(assembly_val))
+                instances[inst.molecule_id] = inst
         db._instances[pmb_type] = instances
 
     # REACTIONS
@@ -500,7 +503,8 @@ def _save_database_csv(db, folder):
             elif pmb_type == "nanoparticle" and isinstance(inst, NanoparticleInstance):
                 rows.append({"pmb_type": pmb_type,
                             "name": inst.name,
-                            "assembly_id": int(inst.assembly_id)})
+                            "molecule_id": int(inst.molecule_id),
+                            "assembly_id": int(inst.assembly_id) if inst.assembly_id is not None else ""})
             else:
                 # fallback to dict
                 try:

@@ -52,6 +52,7 @@ from pyMBE.storage.instances.nanoparticle import NanoparticleInstance
 from pyMBE.storage.reactions.reaction import Reaction, ReactionParticipant
 # Utilities
 import pyMBE.lib.handy_functions as hf
+import pyMBE.lib.np_aux as np_aux
 import pyMBE.storage.io as io
 
 class pymbe_library():
@@ -1099,6 +1100,189 @@ class pymbe_library():
             pos_index+=1
             molecule_ids.append(molecule_id)
         return molecule_ids
+
+    def _create_nanoparticle_sites_positions(self, nanoparticle_tpl, tolerance=1e-6, angle_between_patches=180):
+        """
+        Build per-patch site coordinates for a nanoparticle template.
+
+        Args:
+            nanoparticle_tpl ('NanoparticleTemplate'):
+                Nanoparticle template from the pyMBE database.
+
+            tolerance ('float', optional):
+                Convergence tolerance used in the point-distribution algorithm.
+
+            angle_between_patches ('float', optional):
+                Angle (in degrees) between the two primary patches when
+                ``number_of_patches_of_primary_sites == 2``.
+
+        Returns:
+            ('list[dict]'):
+                List of dictionaries with ``particle_name``, ``positions``, and
+                ``number_of_sites`` for each site patch.
+        """
+        properties = nanoparticle_tpl.calculate_nanoparticle_properties(self)
+        if properties["total_number_of_sites"] <= 0:
+            return []
+
+        core_particle_tpl = self.db.get_template(name=nanoparticle_tpl.core_particle_name,
+                                                 pmb_type="particle")
+        core_state = self.db.get_template(name=core_particle_tpl.initial_state,
+                                          pmb_type="particle_state")
+        core_radius = self.get_radius_map(dimensionless=False)[core_state.es_type]
+        sites_radius = (core_radius - (0.5 * self.units("reduced_length"))).to("reduced_length").magnitude
+
+        total_number_of_sites = properties["total_number_of_sites"]
+        number_primary_patches = nanoparticle_tpl.number_of_patches_of_primary_sites
+        number_primary_sites_per_patch = properties["number_of_primary_sites_per_patch"]
+        number_secondary_sites = properties["number_of_secondary_sites"]
+
+        root_edges = np_aux.uniform_distribution_sites_on_sphere(number_of_edges=total_number_of_sites,
+                                                                 tolerance=tolerance)
+        nanoparticle_edges = np.multiply(root_edges, sites_radius)
+
+        primary_patch_positions = []
+        if number_primary_patches <= 2:
+            initial_edge = [nanoparticle_edges[0]]
+            _, sites_positions_patch = np_aux.define_patch(points=nanoparticle_edges,
+                                                           central_point=initial_edge[0],
+                                                           patch_size=number_primary_sites_per_patch)
+            primary_patch_positions.append(sites_positions_patch)
+
+            if number_primary_patches == 2:
+                distance_omega = (2 * sites_radius**2 - 2 * sites_radius**2 * np.cos(np.radians(angle_between_patches)))**(1 / 2)
+                distance_to_patch_1 = list(
+                    np.abs(np.array(np_aux.calculate_distance_vector_point(nanoparticle_edges, initial_edge[0])) - distance_omega)
+                )
+                second_edge = nanoparticle_edges[distance_to_patch_1.index(min(distance_to_patch_1))]
+                _, sites_positions_patch = np_aux.define_patch(points=nanoparticle_edges,
+                                                               central_point=second_edge,
+                                                               patch_size=number_primary_sites_per_patch)
+                primary_patch_positions.append(sites_positions_patch)
+                np_aux.check_patch_overlaps(sites_positions=primary_patch_positions,
+                                            number_patches=number_primary_patches)
+        elif number_primary_patches > 2:
+            initial_patch_edges = np_aux.uniform_distribution_sites_on_sphere(number_of_edges=number_primary_patches,
+                                                                               tolerance=tolerance)
+            initial_patch_scaled_edges = np.multiply(initial_patch_edges, sites_radius)
+            initial_edges = []
+            for scaled_edge in initial_patch_scaled_edges:
+                comparison = np_aux.calculate_distance_vector_point(nanoparticle_edges, scaled_edge)
+                initial_edges.append(nanoparticle_edges[comparison.index(min(comparison))])
+            for patch_index in range(number_primary_patches):
+                _, sites_positions_patch = np_aux.define_patch(points=nanoparticle_edges,
+                                                               central_point=initial_edges[patch_index],
+                                                               patch_size=number_primary_sites_per_patch)
+                primary_patch_positions.append(sites_positions_patch)
+            np_aux.check_patch_overlaps(sites_positions=primary_patch_positions,
+                                        number_patches=number_primary_patches)
+
+        remaining_positions = set(map(tuple, nanoparticle_edges))
+        for patch_positions in primary_patch_positions:
+            remaining_positions = remaining_positions.difference(set(map(tuple, patch_positions)))
+
+        sites_to_create = []
+        for patch_positions in primary_patch_positions:
+            sites_to_create.append({"particle_name": nanoparticle_tpl.primary_site_particle_name,
+                                    "positions": [list(position) for position in patch_positions],
+                                    "number_of_sites": len(patch_positions)})
+        if nanoparticle_tpl.secondary_site_particle_name is not None and number_secondary_sites > 0:
+            secondary_positions = [list(position) for position in sorted(remaining_positions)]
+            sites_to_create.append({"particle_name": nanoparticle_tpl.secondary_site_particle_name,
+                                    "positions": secondary_positions,
+                                    "number_of_sites": len(secondary_positions)})
+        return sites_to_create
+
+    def create_nanoparticle(self, name, number_of_nanoparticles, espresso_system, list_core_particle_positions=None, fix=False):
+        """
+        Creates one or more nanoparticles in an ESPResSo system using a nanoparticle
+        template from the pyMBE database.
+
+        Args:
+            name ('str'):
+                Label of a nanoparticle template in the pyMBE database.
+
+            number_of_nanoparticles ('int'):
+                Number of nanoparticle instances to create.
+
+            espresso_system ('espressomd.system.System'):
+                ESPResSo system where particles are created.
+
+            list_core_particle_positions ('list', optional):
+                Nested list with one ``[x, y, z]`` position per nanoparticle core.
+                If omitted, random core positions are used.
+
+            fix ('bool', optional):
+                If ``True``, all particles of each nanoparticle are created as fixed.
+
+        Returns:
+            ('dict'):
+                Mapping ``{nanoparticle_id: {"core_particle_id": int,
+                "sites_ids": list[list[int]], "all_sites_ids": list[int]}}``.
+        """
+        if number_of_nanoparticles <= 0:
+            return {}
+        if list_core_particle_positions is not None:
+            if len(list_core_particle_positions) != number_of_nanoparticles:
+                raise ValueError(
+                    f"Number of positions ({len(list_core_particle_positions)}) does not match "
+                    f"number_of_nanoparticles ({number_of_nanoparticles})."
+                )
+            for item in list_core_particle_positions:
+                if not isinstance(item, list) or len(item) != 3:
+                    raise ValueError(
+                        "Each core position must be a list with three coordinates [x, y, z]."
+                    )
+
+        nanoparticle_tpl = self.db.get_template(name=name, pmb_type="nanoparticle")
+        site_patch_specs = self._create_nanoparticle_sites_positions(nanoparticle_tpl=nanoparticle_tpl)
+
+        created_nanoparticles = {}
+        for nanoparticle_index in range(number_of_nanoparticles):
+            nanoparticle_id = self.db._propose_instance_id(pmb_type="nanoparticle")
+            if list_core_particle_positions is None:
+                core_particle_id = self.create_particle(name=nanoparticle_tpl.core_particle_name,
+                                                        espresso_system=espresso_system,
+                                                        number_of_particles=1,
+                                                        fix=fix)[0]
+            else:
+                core_particle_id = self.create_particle(name=nanoparticle_tpl.core_particle_name,
+                                                        espresso_system=espresso_system,
+                                                        position=[list_core_particle_positions[nanoparticle_index]],
+                                                        number_of_particles=1,
+                                                        fix=fix)[0]
+            self.db._update_instance(instance_id=core_particle_id,
+                                     pmb_type="particle",
+                                     attribute="molecule_id",
+                                     value=nanoparticle_id)
+
+            core_position = np.array(espresso_system.part.by_id(core_particle_id).pos)
+            patch_ids = []
+            all_sites_ids = []
+            for patch_spec in site_patch_specs:
+                if patch_spec["number_of_sites"] <= 0:
+                    patch_ids.append([])
+                    continue
+                translated_positions = (np.array(patch_spec["positions"]) + core_position).tolist()
+                created_ids = self.create_particle(name=patch_spec["particle_name"],
+                                                   espresso_system=espresso_system,
+                                                   position=translated_positions,
+                                                   number_of_particles=patch_spec["number_of_sites"],
+                                                   fix=fix)
+                for particle_id in created_ids:
+                    self.db._update_instance(instance_id=particle_id,
+                                             pmb_type="particle",
+                                             attribute="molecule_id",
+                                             value=nanoparticle_id)
+                patch_ids.append(created_ids)
+                all_sites_ids.extend(created_ids)
+
+            self.db._register_instance(NanoparticleInstance(name=name,
+                                                            molecule_id=nanoparticle_id))
+            created_nanoparticles[nanoparticle_id] = {"core_particle_id": core_particle_id,
+                                                      "sites_ids": patch_ids,
+                                                      "all_sites_ids": all_sites_ids}
+        return created_nanoparticles
     
     def create_particle(self, name, espresso_system, number_of_particles, position=None, fix=False):
         """
@@ -1497,8 +1681,7 @@ class pymbe_library():
 
     def define_nanoparticle(self, name, core_particle_name, surface_density_of_sites, primary_site_particle_name, fraction_primary_sites, number_of_patches_of_primary_sites, secondary_site_particle_name=None):
         """
-        Defines a nanoparticle template and creates one nanoparticle instance
-        in the pyMBE database.
+        Defines a nanoparticle template in the pyMBE database.
 
         Args:
             name ('str'):
