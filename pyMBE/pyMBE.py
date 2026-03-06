@@ -1216,12 +1216,12 @@ class pymbe_library():
                 If ``True``, all particles of each nanoparticle are created as fixed.
 
         Returns:
-            ('dict'):
-                Mapping ``{nanoparticle_id: {"core_particle_id": int,
-                "sites_ids": list[list[int]], "all_sites_ids": list[int]}}``.
+            ('list' of 'int'):
+                List of IDs of the created nanoparticle instances.
+
         """
         if number_of_nanoparticles <= 0:
-            return {}
+            return []
         if list_core_particle_positions is not None:
             if len(list_core_particle_positions) != number_of_nanoparticles:
                 raise ValueError(
@@ -1233,11 +1233,9 @@ class pymbe_library():
                     raise ValueError(
                         "Each core position must be a list with three coordinates [x, y, z]."
                     )
-
+        nanoparticle_ids = []
         nanoparticle_tpl = self.db.get_template(name=name, pmb_type="nanoparticle")
         site_patch_specs = self._create_nanoparticle_sites_positions(nanoparticle_tpl=nanoparticle_tpl)
-
-        created_nanoparticles = {}
         for nanoparticle_index in range(number_of_nanoparticles):
             nanoparticle_id = self.db._propose_instance_id(pmb_type="nanoparticle")
             if list_core_particle_positions is None:
@@ -1255,7 +1253,6 @@ class pymbe_library():
                                      pmb_type="particle",
                                      attribute="molecule_id",
                                      value=nanoparticle_id)
-
             core_position = np.array(espresso_system.part.by_id(core_particle_id).pos)
             patch_ids = []
             all_sites_ids = []
@@ -1269,6 +1266,7 @@ class pymbe_library():
                                                    position=translated_positions,
                                                    number_of_particles=patch_spec["number_of_sites"],
                                                    fix=fix)
+                nanoparticle_ids.extend(created_ids)
                 for particle_id in created_ids:
                     self.db._update_instance(instance_id=particle_id,
                                              pmb_type="particle",
@@ -1276,13 +1274,13 @@ class pymbe_library():
                                              value=nanoparticle_id)
                 patch_ids.append(created_ids)
                 all_sites_ids.extend(created_ids)
-
             self.db._register_instance(NanoparticleInstance(name=name,
                                                             molecule_id=nanoparticle_id))
-            created_nanoparticles[nanoparticle_id] = {"core_particle_id": core_particle_id,
-                                                      "sites_ids": patch_ids,
-                                                      "all_sites_ids": all_sites_ids}
-        return created_nanoparticles
+            if not fix:
+                self.enable_motion_of_rigid_object(instance_id=nanoparticle_id, 
+                                                   pmb_type="nanoparticle", 
+                                                   espresso_system=espresso_system)
+        return nanoparticle_ids
     
     def create_particle(self, name, espresso_system, number_of_particles, position=None, fix=False):
         """
@@ -2125,9 +2123,33 @@ class pymbe_library():
         center_of_mass = self.calculate_center_of_mass (instance_id=instance_id,
                                                         espresso_system=espresso_system,
                                                         pmb_type=pmb_type)
+        rigid_center_name = f"{inst.name}_rigid_center"
+        if rigid_center_name not in self.db._templates["particle"]:    
+            part_tpl = ParticleTemplate(name=f"{inst.name}_rigid_center",
+                                    sigma=PintQuantity.from_quantity(q=self.units.Quantity(0, "nm"),
+                                                                        ureg=self.units,
+                                                                        expected_dimension="length"),
+                                    offset=PintQuantity.from_quantity(q=self.units.Quantity(0, "nm"),
+                                                                        ureg=self.units,
+                                                                        expected_dimension="length"),
+                                    cutoff=PintQuantity.from_quantity(q=self.units.Quantity(0, "nm"),
+                                                                        ureg=self.units,
+                                                                        expected_dimension="length"),
+                                    epsilon=PintQuantity.from_quantity(q=self.units.Quantity(0, "kJ"),
+                                                                        ureg=self.units,
+                                                                        expected_dimension="energy"),
+                                    initial_state="None")
+            self.db._register_template(part_tpl)
         rigid_object_center = espresso_system.part.add(pos=center_of_mass,
                                                         rotation=[True,True,True], 
                                                         type=self.propose_unused_type())
+        part_inst = ParticleInstance(particle_id=rigid_object_center.id,
+                                     name=f"{inst.name}_rigid_center",
+                                     residue_id=instance_id if pmb_type == "residue" else None,
+                                     initial_state="None",
+                                     molecule_id=instance_id if pmb_type in self.db._molecule_like_types else None,
+                                     assembly_id=instance_id if pmb_type in self.db._assembly_like_types else None,)
+        self.db._register_instance(part_inst)
         rigid_object_center.mass = len(particle_ids_list)
         momI = 0
         for pid in particle_ids_list:

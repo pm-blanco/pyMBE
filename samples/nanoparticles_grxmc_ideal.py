@@ -182,11 +182,13 @@ L                     = volume ** (1./3.) # Length of the simulation box
 
 espresso_system = espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
 
-nanoparticle_info = pmb.create_nanoparticle(name=nanoparticle_name,
-                                            espresso_system=espresso_system,
-                                            number_of_nanoparticles=number_of_nanoparticles,
-                                            list_core_particle_positions=None)
-print(nanoparticle_info)
+nanoparticle_ids = pmb.create_nanoparticle(name=nanoparticle_name,
+                                           espresso_system=espresso_system,
+                                           number_of_nanoparticles=number_of_nanoparticles,
+                                           list_core_particle_positions=None)
+print(pmb.get_instances_df(pmb_type="nanoparticle"))
+print(pmb.get_instances_df(pmb_type="particle"))
+print(pmb.get_particle_id_map(object_name=nanoparticle_name))
 exit()
 
 if args.mode == 'standard':
