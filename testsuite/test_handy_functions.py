@@ -27,6 +27,7 @@ import logging
 import io
 import re
 import numpy as np
+from unittest.mock import patch
 # Create an in-memory log stream
 log_stream = io.StringIO()
 logging.basicConfig(level=logging.INFO, 
@@ -306,6 +307,63 @@ class Test(ut.TestCase):
         self.assertAlmostEqual(first=dh_params["r_cut"],
                                 second=electrostatics_inputs["params"]["r_cut"],
                                 msg="lib.handy_functions.setup_electrostatic_interactions sets up the wrong cut-off for the DH method")
+
+    def test_generate_lattice_positions(self):
+        """Test :func:`lib.handy_functions.generate_lattice_positions`."""
+        # Basic fcc generation in a box
+        positions_fcc = hf.generate_lattice_positions(lattice_type="fcc",
+                                                      number_of_sites=10,
+                                                      box_length=10.0)
+        self.assertEqual(len(positions_fcc), 10)
+        for pos in positions_fcc:
+            self.assertEqual(len(pos), 3)
+            self.assertTrue(all(0.0 <= value <= 10.0 for value in pos))
+
+        # bcc generation with explicit lattice constant and origin
+        origin = [1.0, 2.0, 3.0]
+        positions_bcc = hf.generate_lattice_positions(lattice_type="bcc",
+                                                      number_of_sites=3,
+                                                      lattice_constant=2.0,
+                                                      origin=origin)
+        self.assertEqual(len(positions_bcc), 3)
+        self.assertListEqual(positions_bcc[0], origin)
+
+        # simple cubic and empty request
+        positions_sc = hf.generate_lattice_positions(lattice_type="sc",
+                                                     number_of_sites=2,
+                                                     lattice_constant=1.5)
+        self.assertEqual(len(positions_sc), 2)
+        self.assertEqual(hf.generate_lattice_positions(lattice_type="sc",
+                                                       number_of_sites=0), [])
+
+    def test_generate_lattice_positions_exceptions(self):
+        """Test exceptions in :func:`lib.handy_functions.generate_lattice_positions`."""
+        with self.assertRaises(ValueError):
+            hf.generate_lattice_positions(lattice_type="hcp", number_of_sites=4)
+        with self.assertRaises(ValueError):
+            hf.generate_lattice_positions(lattice_type="fcc", number_of_sites=-1)
+        with self.assertRaises(ValueError):
+            hf.generate_lattice_positions(lattice_type="fcc", number_of_sites=1, box_length=0.0)
+        with self.assertRaises(ValueError):
+            hf.generate_lattice_positions(lattice_type="fcc", number_of_sites=1, lattice_constant=0.0)
+        with self.assertRaises(ValueError):
+            hf.generate_lattice_positions(lattice_type="fcc", number_of_sites=1, origin=[0.0, 1.0])
+
+    def test_generate_lattice_positions_internal_branches(self):
+        """Test internal branches in :func:`lib.handy_functions.generate_lattice_positions`."""
+        # Force n_cells <= 0 branch
+        with patch("pyMBE.lib.handy_functions.np.ceil", return_value=0):
+            positions = hf.generate_lattice_positions(lattice_type="sc",
+                                                      number_of_sites=1,
+                                                      lattice_constant=1.0)
+        self.assertEqual(len(positions), 1)
+
+        # Force fallback return path after nested loops
+        with patch("builtins.range", side_effect=lambda *args: []):
+            positions = hf.generate_lattice_positions(lattice_type="fcc",
+                                                      number_of_sites=2,
+                                                      lattice_constant=1.0)
+        self.assertEqual(positions, [])
 
 if __name__ == "__main__":
     ut.main()

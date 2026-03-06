@@ -342,6 +342,90 @@ def get_number_of_particles(espresso_system, ptype):
         kwargs = {"type": ptype}
     return espresso_system.number_of_particles(*args, **kwargs)
 
+def generate_lattice_positions(lattice_type, number_of_sites, lattice_constant=1.0, box_length=None, origin=None):
+    """
+    Generate lattice positions for a requested lattice type and number of sites.
+
+    Args:
+        lattice_type ('str'):
+            Lattice type identifier. Supported values are:
+            - ``"sc"``  (simple cubic)
+            - ``"bcc"`` (body-centered cubic)
+            - ``"fcc"`` (face-centered cubic)
+
+        number_of_sites ('int'):
+            Number of lattice positions to generate.
+
+        lattice_constant ('float', optional):
+            Lattice constant. Used when ``box_length`` is not provided.
+            Must be positive.
+
+        box_length ('float', optional):
+            If provided, lattice positions are fitted into a cubic box of side
+            ``box_length`` by choosing the cell spacing automatically.
+
+        origin ('list[float]', optional):
+            Origin shift applied to all generated coordinates.
+            Defaults to ``[0.0, 0.0, 0.0]``.
+
+    Returns:
+        ('list[list[float]]'):
+            List of 3D lattice positions.
+
+    Raises:
+        ValueError:
+            If ``lattice_type`` is unsupported, ``number_of_sites`` is negative,
+            or geometric inputs are invalid.
+    """
+    lattice_key = lattice_type.lower()
+    basis_map = {
+        "sc": np.array([[0.0, 0.0, 0.0]]),
+        "bcc": np.array([[0.0, 0.0, 0.0],
+                         [0.5, 0.5, 0.5]]),
+        "fcc": np.array([[0.0, 0.0, 0.0],
+                         [0.0, 0.5, 0.5],
+                         [0.5, 0.0, 0.5],
+                         [0.5, 0.5, 0.0]]),
+    }
+    if lattice_key not in basis_map:
+        raise ValueError(f"Unsupported lattice_type '{lattice_type}'. Supported values are {list(basis_map.keys())}.")
+    if number_of_sites < 0:
+        raise ValueError("number_of_sites must be a non-negative integer.")
+    if number_of_sites == 0:
+        return []
+    if origin is None:
+        origin = np.zeros(3)
+    else:
+        origin = np.array(origin, dtype=float)
+        if origin.shape != (3,):
+            raise ValueError("origin must be a 3D coordinate [x, y, z].")
+
+    points_per_cell = len(basis_map[lattice_key])
+    n_cells = int(np.ceil((number_of_sites / points_per_cell) ** (1.0 / 3.0)))
+    if n_cells <= 0:
+        n_cells = 1
+
+    if box_length is not None:
+        if box_length <= 0:
+            raise ValueError("box_length must be positive.")
+        spacing = float(box_length) / n_cells
+    else:
+        if lattice_constant <= 0:
+            raise ValueError("lattice_constant must be positive.")
+        spacing = float(lattice_constant)
+
+    basis = basis_map[lattice_key]
+    positions = []
+    for i in range(n_cells):
+        for j in range(n_cells):
+            for k in range(n_cells):
+                cell_origin = np.array([i, j, k], dtype=float) * spacing
+                for site in basis:
+                    positions.append((cell_origin + site * spacing + origin).tolist())
+                    if len(positions) == number_of_sites:
+                        return positions
+    return positions
+
 def get_residues_from_topology_dict(topology_dict, model):
     """
     Groups beads from a topology dictionary into residues and assigns residue names.

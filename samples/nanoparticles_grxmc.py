@@ -24,7 +24,7 @@ import argparse
 from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
-from pyMBE.lib.handy_functions import do_reaction, setup_electrostatic_interactions, relax_espresso_system
+from pyMBE.lib.handy_functions import do_reaction, setup_electrostatic_interactions, relax_espresso_system, generate_lattice_positions
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -48,7 +48,7 @@ parser.add_argument('--pH',
 parser.add_argument('--output',
                     type=Path,
                     required= False,
-                    default=Path(__file__).parent / "time_series" / "nanoparticle_mixture_grxmc_ideal",
+                    default=Path(__file__).parent / "time_series" / "nanoparticle_grxmc",
                     help='output directory')
 parser.add_argument('--no_verbose', action='store_false', help="Switch to deactivate verbose",default=True)
 args = parser.parse_args()
@@ -71,12 +71,13 @@ pH_value= args.pH
 ideal = False # Set to True to not consider electrostatic interactions in the system, and only sample the reactions
 
 # Nanoparticle parameters
-vol_frac_of_nanoparticles = 0.01		# Volume fraction of the nanoparticle
-number_of_nanoparticles   = 10      # Total number of the nanoparticles
+vol_frac_of_nanoparticles = 0.1		# Volume fraction of the nanoparticle
+number_of_nanoparticles   = 20      # Total number of the nanoparticles
 nanoparticle_diameter     = 4*pmb.units.reduced_length		# Diameter of the nanoparticle in reduced units
 surface_denstity_of_sites = 0.2  	# Surface density of sites in sites/reduced units^2
 pka_A_site                = 4.0
 pka_B_site                = 10.0
+nanoparticle_lattice_type = "fcc"
 
 # Names for the componentes of the nanoparticles
 core_particle = "core_particle"
@@ -185,10 +186,17 @@ L                     = volume ** (1./3.) # Length of the simulation box
 
 espresso_system = espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
 
+# Create non-overlapping nanoparticle core positions on a lattice
+nanoparticle_positions = generate_lattice_positions(
+    lattice_type=nanoparticle_lattice_type,
+    number_of_sites=number_of_nanoparticles,
+    box_length=L.to('reduced_length').magnitude,
+)
+
 nanoparticle_ids = pmb.create_nanoparticle(name=nanoparticle_name,
                                            espresso_system=espresso_system,
                                            number_of_nanoparticles=number_of_nanoparticles,
-                                           list_core_particle_positions=None)
+                                           list_core_particle_positions=nanoparticle_positions)
 
 if args.mode == 'standard':
     pmb.create_counterions(object_name=nanoparticle_name,
