@@ -52,7 +52,7 @@ from pyMBE.storage.instances.nanoparticle import NanoparticleInstance
 from pyMBE.storage.reactions.reaction import Reaction, ReactionParticipant
 # Utilities
 import pyMBE.lib.handy_functions as hf
-import pyMBE.lib.np_aux as np_aux
+import pyMBE.lib.nanoparticle_tools as np_aux
 import pyMBE.storage.io as io
 
 class pymbe_library():
@@ -391,6 +391,8 @@ class pymbe_library():
             label="assembly_map"
         elif pmb_type in self.db._molecule_like_types:
             label="molecule_map"
+        elif pmb_type == "particle":
+            label="all"
         else:
             label=f"{pmb_type}_map"
         return label
@@ -491,7 +493,9 @@ class pymbe_library():
         axis_list = [0,1,2]
         inst = self.db.get_instance(pmb_type=pmb_type,
                                     instance_id=instance_id)
-        particle_id_list = self.get_particle_id_map(object_name=inst.name)["all"]
+        id_map = self.get_particle_id_map(object_name=inst.name)
+        label = self._get_label_id_map(pmb_type=pmb_type)
+        particle_id_list = id_map[label][instance_id]
         for pid in particle_id_list:
             for axis in axis_list:
                 center_of_mass [axis] += espresso_system.part.by_id(pid).pos[axis]
@@ -676,7 +680,7 @@ class pymbe_library():
             object_name (str):
                 Name of the object (e.g. molecule, residue, peptide, protein).
             pmb_type (str):
-                Type of object to analyze. Must be molecule-like.
+                Type of object to analyze.
             dimensionless (bool, optional):
                 If True, return charge as a pure number.
                 If False, return a quantity with reduced_charge units.
@@ -687,9 +691,12 @@ class pymbe_library():
         """
         id_map = self.get_particle_id_map(object_name=object_name)
         label = self._get_label_id_map(pmb_type=pmb_type)
-        instance_map = id_map[label]
+        if pmb_type == "particle":
+            iterable = ((pid, [pid]) for pid in id_map[label])
+        else:
+            iterable = id_map[label].items()
         charges = {}
-        for instance_id, particle_ids in instance_map.items():
+        for instance_id, particle_ids in iterable:
             if dimensionless:
                 net_charge = 0.0
             else:

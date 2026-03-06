@@ -25,16 +25,25 @@ from scipy.spatial import cKDTree
 
 def uniform_distribution_sites_on_sphere(number_of_edges=2, tolerance=1e-6):
     """
-    This algorithm is based on iterative force‑based relaxation for distributing points on a sphere, conceptually similar to the Thomson problem (J.J. Thomson, 1904) for minimizing repulsive potential energy of charges on a sphere. See also related uniform sphere point distribution techniques in computational geometry.
-    References:
-    – Thomson problem — Wikipedia (overview of the physics problem), Wikipedia.
-    – Simple schemes for uniform point distribution. Cheng Guan Koay, J Comput Sci. 2011 Dec;2(4):377–381. doi: 10.1016/j.jocs.2011.06.007.
-    
+    Distribute points approximately uniformly on the surface of a unit sphere.
+
+    The algorithm uses iterative force-based relaxation, conceptually similar
+    to the Thomson problem.
+
     Args:
-        number_of_edges(`int`): Number of total points to distribute on the surface of sphere with radius 1 and origin in [0,0,0]. Defaults = 2.
-        tolerance(`float`): Set the tolerance of the numerical method. Defaults = 1e-6.
+        number_of_edges ('int', optional):
+            Number of points to distribute on the sphere surface.
+
+        tolerance ('float', optional):
+            Convergence tolerance for the iterative relaxation.
+
     Returns:
-        edges(`list` of `float`): List with the minimized distribution of points.
+        ('list[tuple[float, float, float]]'):
+            Point coordinates on the unit sphere centered at ``[0, 0, 0]``.
+
+    Notes:
+        – Thomson problem — Wikipedia (overview of the physics problem), Wikipedia.
+        – Simple schemes for uniform point distribution. Cheng Guan Koay, J Comput Sci. 2011 Dec;2(4):377–381. doi: 10.1016/j.jocs.2011.06.007.
     """
 
     # Generates initial configuration
@@ -109,7 +118,18 @@ def uniform_distribution_sites_on_sphere(number_of_edges=2, tolerance=1e-6):
 
 def calculate_distance_vector_point(A,p):
     """
-    Calculates the distance between a list of vectors and a point [x,y,z]
+    Compute Euclidean distances between a set of 3D points and one 3D point.
+
+    Args:
+        A ('iterable'):
+            Iterable of 3D points.
+
+        p ('iterable'):
+            Reference 3D point.
+
+    Returns:
+        ('list[float]'):
+            Euclidean distance from each point in ``A`` to ``p``.
     """
     C = []
     for a in A:
@@ -118,7 +138,23 @@ def calculate_distance_vector_point(A,p):
 
 def define_patch(points,central_point,patch_size):
     """
-    Define a patch of `patch_size` number of points from a uniform distribution of points `points`, using as origin `central_point`. 
+    Select the nearest ``patch_size`` points around a central point.
+
+    Args:
+        points ('iterable'):
+            Iterable of candidate 3D points.
+
+        central_point ('iterable'):
+            3D point used as the patch center.
+
+        patch_size ('int'):
+            Number of points to include in the patch.
+
+    Returns:
+        ('tuple[list[float], list[tuple[float, float, float]]]'):
+            Pair with:
+            - Distances from all input points to ``central_point``.
+            - Coordinates of the selected patch points.
     """
     site_positions            = []
     distance_to_central_point = calculate_distance_vector_point(points,central_point)
@@ -129,7 +165,22 @@ def define_patch(points,central_point,patch_size):
 
 def check_patch_overlaps(sites_positions,number_patches):
     """
-    Check if there are overlaps between any of the `number_patches` patches stored in `sites_positions`.
+    Check for overlapping site coordinates between patches.
+
+    Args:
+        sites_positions ('list'):
+            List containing one list of coordinates per patch.
+
+        number_patches ('int'):
+            Number of patches to compare.
+
+    Returns:
+        ('int'):
+            Returns ``0`` when no overlap is detected.
+
+    Raises:
+        ValueError:
+            If overlapping coordinates are found between any pair of patches.
     """
     overlapped_sites = []
     for i in range(number_patches-1):
@@ -144,7 +195,15 @@ def check_patch_overlaps(sites_positions,number_patches):
 
 def calculate_distance_between_points_on_sphere(points):
     """
-    Calculates the average, standard deviation and standard error of the euclidean distance between `points` distributed uniformuly on a sphere.
+    Compute nearest-neighbor distance statistics for points on a sphere.
+
+    Args:
+        points ('iterable'):
+            Nested iterable with 3D point coordinates.
+
+    Returns:
+        ('tuple[float, float, float]'):
+            Tuple ``(mean, std, stderr)`` of nearest-neighbor distances.
     """
     points = np.vstack(points)
     tree = cKDTree(points)
@@ -157,12 +216,18 @@ def calculate_distance_between_points_on_sphere(points):
 
 def calculate_dipole_moment(charges, positions):
     """
-    Calculate the dipole moment for a system of point charges.
+    Compute dipole moment for a set of point charges.
 
-     - charges  : List of charge values [q1, q2, ...]
-     - positions: List of position vectors [[x1, y1, z1], [x2, y2, z2], ...]
-    
-    return: Dipole moment vector [px, py, pz] and its magnitude.
+    Args:
+        charges ('iterable'):
+            Charge values.
+
+        positions ('iterable'):
+            3D coordinates matching ``charges``.
+
+    Returns:
+        ('tuple[numpy.ndarray, float]'):
+            Dipole vector and dipole magnitude.
     """
     dipole_moment = np.sum(np.array(charges)[:, None] * np.array(positions), axis=0)
     dipole_magnitude = np.linalg.norm(dipole_moment)
@@ -170,12 +235,18 @@ def calculate_dipole_moment(charges, positions):
 
 def calculate_quadrupole_moment(charges, positions):
     """
-    Calculate the quadrupole moment tensor for a system of point charges.
-    
-    - charges: List of charge values [q1, q2, ...]
-     - positions: List of position vectors [[x1, y1, z1], [x2, y2, z2], ...]
-    
-    return: Quadrupole moment tensor (3x3 matrix), its magnitude and its eigenvalues.
+    Compute quadrupole moment tensor for a set of point charges.
+
+    Args:
+        charges ('iterable'):
+            Charge values.
+
+        positions ('iterable'):
+            3D coordinates matching ``charges``.
+
+    Returns:
+        ('tuple[numpy.ndarray, float, numpy.ndarray]'):
+            Quadrupole tensor (3x3), Frobenius norm, and eigenvalues.
     """
     Q = np.zeros((3, 3))
     positions = np.array(positions)

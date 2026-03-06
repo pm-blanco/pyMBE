@@ -24,7 +24,7 @@ import argparse
 from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
-from pyMBE.lib.handy_functions import do_reaction
+from pyMBE.lib.handy_functions import do_reaction, setup_electrostatic_interactions, relax_espresso_system
 import numpy as np
 
 # Create an instance of pyMBE library
@@ -64,32 +64,38 @@ pmb.set_reduced_units(unit_length=0.4*pmb.units.nm,
                       Kw=1e-14)
 N_samples           = 1000	# to make the demonstration quick, we set this to a very low value
 MD_steps_per_sample = 1000
-N_samples_print     = 1000	# Write the trajectory every 100 samples
-LANGEVIN_SEED 	    = 42
+N_samples_print     = 1	# Write the trajectory every 100 samples
+langevin_seed 	    = 42
 dt                  = 0.001
 solvent_permitivity = 78.3
 pH_value= args.pH
+ideal = False # Set to True to not consider electrostatic interactions in the system, and only sample the reactions
 
 # Nanoparticle parameters
-vol_frac_of_nanoparticles = 0.1		# Volume fraction of the nanoparticle
+vol_frac_of_nanoparticles = 0.01		# Volume fraction of the nanoparticle
 number_of_nanoparticles   = 10      # Total number of the nanoparticles
-nanoparticle_diameter     = 4		# Diameter of the nanoparticle in reduced units
+nanoparticle_diameter     = 4*pmb.units.reduced_length		# Diameter of the nanoparticle in reduced units
 surface_denstity_of_sites = 0.2  	# Surface density of sites in sites/reduced units^2
 pka_A_site                = 4.0
 pka_B_site                = 10.0
 
 # Names for the componentes of the nanoparticles
-
 core_particle = "core_particle"
 A_site        = "A_site"
 B_site        = "B_site"
 
 # Patchy distribution of sites A and B
-
 sites_distribution = {"main"     : {"particle_name"     : A_site,
                                     "fraction"          : 0.5,
                                     "number_of_patches" : 2},
                       "secondary": {"particle_name"     : B_site}}
+
+# LJ parameters for the nanoparticles
+sigma_core_particle = 1*pmb.units('reduced_length')
+sigma_sites        = 0*pmb.units('reduced_length')
+epsilon = 1*pmb.units('reduced_energy')
+offset_core_particle = nanoparticle_diameter-sigma_core_particle
+cutoff_core_particle = 2**(1/6)*sigma_core_particle
 
 # Short simulation setup for testing
 
@@ -99,28 +105,26 @@ if args.test:
     np_diameter         = 4
     surf_den_sites      = 0.2	
 
-
 # Defines the components of the nanoparticle (core particle, A and B type of sites) in the pyMBE data frame
 
-pmb.define_particle(
-    name    = core_particle,
-    z       = 0,
-    sigma   = nanoparticle_diameter*pmb.units('reduced_length'),
-    epsilon = 1*pmb.units('reduced_energy'))
+pmb.define_particle(name    = core_particle,
+                    z       = 0,
+                    sigma   = sigma_core_particle,
+                    epsilon = epsilon,
+                    offset  = offset_core_particle,
+                    cutoff  = cutoff_core_particle)
 
-pmb.define_particle(
-    name    = A_site,
-    acidity = "acidic",
-    pka     = pka_A_site,
-    sigma   = 1*pmb.units('reduced_length'),
-    epsilon = 1*pmb.units('reduced_energy'))
+pmb.define_particle(name    = A_site,
+                    acidity = "acidic",
+                    pka     = pka_A_site,
+                    sigma   = sigma_sites,
+                    epsilon = epsilon)
 
-pmb.define_particle(
-    name    = B_site,
-    acidity = "basic",
-    pka     = pka_B_site,
-    sigma   = 1*pmb.units('reduced_length'),
-    epsilon = 1*pmb.units('reduced_energy'))
+pmb.define_particle(name    = B_site,
+                    acidity = "basic",
+                    pka     = pka_B_site,
+                    sigma   = sigma_sites,
+                    epsilon = epsilon)
 
 nanoparticle_name = "nanoparticle"
 pmb.define_nanoparticle(name                     = nanoparticle_name,
@@ -186,35 +190,21 @@ nanoparticle_ids = pmb.create_nanoparticle(name=nanoparticle_name,
                                            espresso_system=espresso_system,
                                            number_of_nanoparticles=number_of_nanoparticles,
                                            list_core_particle_positions=None)
-print(pmb.get_instances_df(pmb_type="nanoparticle"))
-print(pmb.get_instances_df(pmb_type="particle"))
-print(pmb.get_particle_id_map(object_name=nanoparticle_name))
-exit()
 
 if args.mode == 'standard':
-    pmb.create_counterions(object_name=peptide1,
+    pmb.create_counterions(object_name=nanoparticle_name,
                            cation_name=proton_name,
                            anion_name=hydroxide_name,
                            espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 1
-    pmb.create_counterions(object_name=peptide2,
-                           cation_name=proton_name,
-                           anion_name=hydroxide_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 2
-
     c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                                               cation_name=sodium_name,
                                               anion_name=chloride_name,
                                               c_salt=c_salt)
 elif args.mode == 'unified':
-    pmb.create_counterions(object_name=peptide1, 
+    pmb.create_counterions(object_name=nanoparticle_name, 
                            cation_name=cation_name,
                            anion_name=anion_name,
                            espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 1
-    pmb.create_counterions(object_name=peptide2, 
-                           cation_name=cation_name,
-                           anion_name=anion_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 2
-
     c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                                               cation_name=cation_name,
                                               anion_name=anion_name,
@@ -224,34 +214,39 @@ with open(frames_path / "trajectory0.vtf", mode='w+t') as coordinates:
     vtf.writevsf(espresso_system, coordinates)
     vtf.writevcf(espresso_system, coordinates)
 
-#List of ionisable groups 
-basic_groups = pmb.df.loc[(~pmb.df['particle_id'].isna()) & (pmb.df['acidity']=='basic')].name.to_list()
-acidic_groups = pmb.df.loc[(~pmb.df['particle_id'].isna()) & (pmb.df['acidity']=='acidic')].name.to_list()
-list_ionisable_groups = basic_groups + acidic_groups
-total_ionisable_groups = len (list_ionisable_groups)
-# Get peptide net charge
+# count acid/base particles
+pka_set = pmb.get_pka_set()
+acid_base_ids = []
+for name in pka_set.keys():
+    acid_base_ids+=pmb.db.find_instance_ids_by_name(pmb_type="particle",
+                                                    name=name)        
+total_ionisable_groups = len(acid_base_ids)
+
+# Get nanoparticle net charge
 if verbose:
     print("The box length of your system is", L.to('reduced_length'), L.to('nm'))
 
 if args.mode == 'standard':
-    grxmc, sucessful_reactions_labels, ionic_strength_res = pmb.setup_grxmc_reactions(pH_res=pH_value, 
-                                                                                   c_salt_res=c_salt, 
-                                                                                   proton_name=proton_name, 
-                                                                                   hydroxide_name=hydroxide_name, 
-                                                                                   salt_cation_name=sodium_name, 
-                                                                                   salt_anion_name=chloride_name,
-                                                                                   activity_coefficient=lambda x: 1.0)
+    grxmc,  ionic_strength_res = pmb.setup_grxmc_reactions(pH_res=pH_value, 
+                                                           c_salt_res=c_salt, 
+                                                           proton_name=proton_name, 
+                                                           hydroxide_name=hydroxide_name, 
+                                                           salt_cation_name=sodium_name, 
+                                                           salt_anion_name=chloride_name,
+                                                           activity_coefficient=lambda x: 1.0)
 elif args.mode == 'unified':
-    grxmc, sucessful_reactions_labels, ionic_strength_res = pmb.setup_grxmc_unified(pH_res=pH_value, 
-                                                                                 c_salt_res=c_salt, 
-                                                                                 cation_name=cation_name, 
-                                                                                 anion_name=anion_name,
-                                                                                 activity_coefficient=lambda x: 1.0)
+    grxmc,  ionic_strength_res = pmb.setup_grxmc_unified(pH_res=pH_value, 
+                                                         c_salt_res=c_salt, 
+                                                         cation_name=cation_name, 
+                                                         anion_name=anion_name,
+                                                         activity_coefficient=lambda x: 1.0)
 if verbose:
-    print('The acid-base reaction has been sucessfully setup for ', sucessful_reactions_labels)
+    print(pmb.get_reactions_df())
 
-# Setup espresso to track the ionization of the acid/basic groups in peptide
+# Setup espresso to track the ionization of the acid/basic groups in nanoparticle sites
 type_map =pmb.get_type_map()
+print(type_map)
+
 types = list (type_map.values())
 espresso_system.setup_type_map(type_list = types)
 
@@ -271,30 +266,61 @@ with open(frames_path / "trajectory1.vtf", mode='w+t') as coordinates:
 # Setup espresso to do langevin dynamics
 espresso_system.time_step= dt 
 espresso_system.integrator.set_vv()
-espresso_system.thermostat.set_langevin(kT=pmb.kT.to('reduced_energy').magnitude, gamma=0.1, seed=LANGEVIN_SEED)
+espresso_system.thermostat.set_langevin(kT=pmb.kT.to('reduced_energy').magnitude, gamma=0.1, seed=langevin_seed)
 espresso_system.cell_system.skin=0.4
+if not ideal:
+    ##Setup the potential energy
+    if verbose:
+        print('Setup LJ interaction (this can take a few seconds)')
+    pmb.setup_lj_interactions (espresso_system=espresso_system)
+    if verbose:
+        print('Minimize energy before adding electrostatics')
+    relax_espresso_system(espresso_system=espresso_system,
+                          seed=langevin_seed)
+    if verbose:
+        print('Setup and tune electrostatics (this can take a few seconds)')
+    setup_electrostatic_interactions(units=pmb.units,
+                                    espresso_system=espresso_system,
+                                    kT=pmb.kT,
+                                    verbose=verbose)
+    if verbose:
+        print('Minimize energy after adding electrostatics')
+    relax_espresso_system(espresso_system=espresso_system,
+                          seed=langevin_seed)
 
 #Save the pyMBE dataframe in a CSV file
-pmb.write_pmb_df (filename='df.csv')
+#Save the pyMBE database
+pmb.save_database(folder=args.output / 'database')
+
 time_series={}
-for label in ["time","charge_peptide1","charge_peptide2","num_plus","xi_plus"]:
+for label in ["time", "net_charge_nanoparticle", "mean_charge_primary_sites","mean_charge_secondary_sites", "num_plus","xi_plus"]:
     time_series[label]=[] 
 
 # Main simulation loop
 N_frame=0
 for step in range(N_samples):
-    espresso_system.integrator.run(steps=MD_steps_per_sample)        
+    print(f"Sample {step+1}/{N_samples}")
+    if not ideal:
+        espresso_system.integrator.run(steps=MD_steps_per_sample)        
     do_reaction(grxmc, steps=total_ionisable_groups)
     time_series["time"].append(espresso_system.time)
-    # Get net charge of peptide1 and peptide2
-    charge_dict_peptide1=pmb.calculate_net_charge(espresso_system=espresso_system, 
-                                            molecule_name=peptide1,
-                                            dimensionless=True)
-    charge_dict_peptide2=pmb.calculate_net_charge(espresso_system=espresso_system, 
-                                            molecule_name=peptide2,
-                                            dimensionless=True)
-    time_series["charge_peptide1"].append(charge_dict_peptide1["mean"])
-    time_series["charge_peptide2"].append(charge_dict_peptide2["mean"])
+    # Get net charge of nanoparticle and peptide2
+    charge_dict_nanoparticle=pmb.calculate_net_charge(espresso_system=espresso_system, 
+                                                object_name=nanoparticle_name,
+                                                pmb_type="nanoparticle",
+                                                dimensionless=True)
+    charge_dict_A_site=pmb.calculate_net_charge(espresso_system=espresso_system, 
+                                                object_name=A_site,
+                                                pmb_type="particle",
+                                                dimensionless=True)
+    charge_dict_B_site=pmb.calculate_net_charge(espresso_system=espresso_system, 
+                                                object_name=B_site,
+                                                pmb_type="particle",
+                                                dimensionless=True)
+    time_series["net_charge_nanoparticle"].append(charge_dict_nanoparticle["mean"])
+    time_series["mean_charge_primary_sites"].append(charge_dict_A_site["mean"])
+    time_series["mean_charge_secondary_sites"].append(charge_dict_B_site["mean"])
+    # Get degree of ionization of primary and secondary sites
     if args.mode == 'standard':
         num_plus = espresso_system.number_of_particles(type=type_map["Na"])+espresso_system.number_of_particles(type=type_map["Hplus"])
     elif args.mode == 'unified':
@@ -315,9 +341,7 @@ data_path.mkdir(parents=True, exist_ok=True)
 time_series=pd.DataFrame(time_series)
 
 filename=built_output_name(input_dict={"mode":args.mode,
-                                       "sequence1":sequence1,
-                                       "sequence2": sequence2,
-                                       "pH":pH_value})
+                                       "pH":args.pH})
 
 time_series.to_csv(data_path / f"{filename}_time_series.csv",
                     index=False)

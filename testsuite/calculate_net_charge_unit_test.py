@@ -148,6 +148,14 @@ class Test(ut.TestCase):
         np.testing.assert_equal(res_charge_map[2], 0.0*pmb.units.Quantity(1,'reduced_charge'))
         np.testing.assert_equal(res_charge_map[3], 0.0*pmb.units.Quantity(1,'reduced_charge'))
         np.testing.assert_equal(res_charge_map[4], 0.0*pmb.units.Quantity(1,'reduced_charge'))
+        # Check that particle-level charge is computed per particle instance
+        charge_map_particle = pmb.calculate_net_charge(object_name="+1p",
+                                                       pmb_type="particle",
+                                                       espresso_system=espresso_system)
+        np.testing.assert_equal(charge_map_particle["mean"], 1.0*pmb.units.Quantity(1,'reduced_charge'))
+        particle_ids = pmb.get_particle_id_map(object_name="+1p")["all"]
+        expected_particle_map = {pid: 1.0*pmb.units.Quantity(1,'reduced_charge') for pid in particle_ids}
+        np.testing.assert_equal(charge_map_particle["instances"], expected_particle_map)
 
         
     def test_calculate_net_charge_without_units(self):
@@ -200,7 +208,15 @@ class Test(ut.TestCase):
         np.testing.assert_equal(res_charge_map[2], 0.0)
         np.testing.assert_equal(res_charge_map[3], 0.0)
         np.testing.assert_equal(res_charge_map[4], 0.0)
+        # Check that particle-level charge is computed per particle instance
+        charge_map_particle = pmb.calculate_net_charge(object_name="+1p",
+                                                       pmb_type="particle",
+                                                       espresso_system=espresso_system,
+                                                       dimensionless=True)
+        np.testing.assert_equal(charge_map_particle["mean"], 1.0)
+        particle_ids = pmb.get_particle_id_map(object_name="+1p")["all"]
+        expected_particle_map = {pid: 1.0 for pid in particle_ids}
+        np.testing.assert_equal(charge_map_particle["instances"], expected_particle_map)
 
 if __name__ == '__main__':
     ut.main()
-
