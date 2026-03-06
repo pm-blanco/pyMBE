@@ -1245,6 +1245,7 @@ class pymbe_library():
         site_patch_specs = self._create_nanoparticle_sites_positions(nanoparticle_tpl=nanoparticle_tpl)
         for nanoparticle_index in range(number_of_nanoparticles):
             nanoparticle_id = self.db._propose_instance_id(pmb_type="nanoparticle")
+            nanoparticle_ids.append(nanoparticle_id)
             if list_core_particle_positions is None:
                 core_particle_id = self.create_particle(name=nanoparticle_tpl.core_particle_name,
                                                         espresso_system=espresso_system,
@@ -1273,7 +1274,6 @@ class pymbe_library():
                                                    position=translated_positions,
                                                    number_of_particles=patch_spec["number_of_sites"],
                                                    fix=fix)
-                nanoparticle_ids.extend(created_ids)
                 for particle_id in created_ids:
                     self.db._update_instance(instance_id=particle_id,
                                              pmb_type="particle",

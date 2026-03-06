@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2025 pyMBE-dev team
+# Copyright (C) 2026 pyMBE-dev team
 #
 # This file is part of pyMBE.
 #
@@ -25,7 +25,6 @@ from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
 from pyMBE.lib.handy_functions import do_reaction, setup_electrostatic_interactions, relax_espresso_system
-import numpy as np
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)

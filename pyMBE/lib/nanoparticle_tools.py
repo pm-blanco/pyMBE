@@ -207,7 +207,7 @@ def calculate_distance_between_points_on_sphere(points):
     """
     points = np.vstack(points)
     tree = cKDTree(points)
-    distances, indices = tree.query(points, k=7)  # Assuming 6 neighbors plus the point itself k = 7
+    distances, _ = tree.query(points, k=7)  # Assuming 6 neighbors plus the point itself k = 7
     nearest_neighbors_dist = distances[:, 1]      # Removing self (distance = 0)
     avg_dis = np.mean(nearest_neighbors_dist)
     dev_dis = np.std(nearest_neighbors_dist)
