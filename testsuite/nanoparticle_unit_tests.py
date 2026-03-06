@@ -36,11 +36,23 @@ class TestNanoparticleCreation(ut.TestCase):
 
     def setUp(self):
         """
-        Reset ESPResSo state between tests while reusing the single System instance.
+        Reset ESPResSo state before each unit test.
+
+        Notes:
+            - ESPResSo allows one ``System`` instance per process in this test
+            file, so particles are cleared between tests.
         """
         espresso_system.part.clear()
 
     def _build_pmb_with_particles(self):
+        """
+        Build a pyMBE object with particle templates used by nanoparticle tests.
+
+        Returns:
+            ('pyMBE.pymbe_library'):
+                Configured pyMBE object containing templates for ``core``,
+                ``A``, and ``B`` particles.
+        """
         pmb = pyMBE.pymbe_library(seed=42)
         pmb.set_reduced_units(unit_length=0.4 * pmb.units.nm,
                               Kw=1e-14)
@@ -60,6 +72,13 @@ class TestNanoparticleCreation(ut.TestCase):
         return pmb
 
     def test_create_nanoparticle_registers_instances(self):
+        """
+        Unit test: verify nanoparticle creation and database bookkeeping.
+
+        Notes:
+            - Checks nanoparticle instance IDs, particle-to-molecule linkage, and
+            particle count consistency with template-derived properties.
+        """
         pmb = self._build_pmb_with_particles()
         nanoparticle_name = "np"
         pmb.define_nanoparticle(name=nanoparticle_name,
@@ -114,6 +133,12 @@ class TestNanoparticleCreation(ut.TestCase):
         self.assertEqual(len(particle_id_map["all"]), expected_particles_per_np * 2)
 
     def test_create_nanoparticle_input_validation_and_empty(self):
+        """
+        Unit test: verify input validation and empty-creation behavior.
+
+        Notes:
+            - Covers zero requested nanoparticles and invalid core-position inputs.
+        """
         pmb = self._build_pmb_with_particles()
         pmb.define_nanoparticle(name="np",
                                 core_particle_name="core",
@@ -141,6 +166,9 @@ class TestNanoparticleCreation(ut.TestCase):
                                     list_core_particle_positions=[[1.0, 2.0]])
 
     def test_create_nanoparticle_calls_enable_motion_when_not_fixed(self):
+        """
+        Unit test: verify rigid-body motion hook is called when ``fix=False``.
+        """
         pmb = self._build_pmb_with_particles()
         pmb.define_nanoparticle(name="np",
                                 core_particle_name="core",
@@ -167,6 +195,12 @@ class TestNanoparticleCreation(ut.TestCase):
         self.assertEqual(calls, [(0, "nanoparticle")])
 
     def test_create_nanoparticle_sites_positions_variants(self):
+        """
+        Unit test: verify site-position generation across template variants.
+
+        Notes:
+            - Covers two-patch, multi-patch, and zero-site configurations.
+        """
         pmb = self._build_pmb_with_particles()
 
         # Two primary patches + secondary sites
@@ -215,6 +249,9 @@ class TestNanoparticleCreation(ut.TestCase):
         self.assertEqual(pmb._create_nanoparticle_sites_positions(nanoparticle_tpl=tpl_zero), [])
 
     def test_create_nanoparticle_zero_site_patch_branch(self):
+        """
+        Unit test: cover branch where a generated patch has zero sites.
+        """
         pmb = self._build_pmb_with_particles()
         pmb.define_nanoparticle(name="np",
                                 core_particle_name="core",
@@ -240,6 +277,9 @@ class TestNanoparticleCreation(ut.TestCase):
         self.assertEqual(created_ids, [0])
 
     def test_nanoparticle_tools_standalone_functions(self):
+        """
+        Unit test: verify helper functions in ``nanoparticle_tools``.
+        """
         points = nanoparticle_tools.uniform_distribution_sites_on_sphere(number_of_edges=1, tolerance=1e-6)
         self.assertEqual(len(points), 1)
         self.assertEqual(len(points[0]), 3)
@@ -287,6 +327,13 @@ class TestNanoparticleCreation(ut.TestCase):
         self.assertGreaterEqual(q_mag, 0.0)
 
     def test_nanoparticle_template_edge_cases_and_manager_paths(self):
+        """
+        Unit test: verify nanoparticle-template edge cases and manager paths.
+
+        Notes:
+            - Covers template validation errors and nanoparticle-specific manager
+            collection logic.
+        """
         pmb = self._build_pmb_with_particles()
         pmb.define_nanoparticle(name="np",
                                 core_particle_name="core",
@@ -366,6 +413,13 @@ class TestNanoparticleCreation(ut.TestCase):
             tpl_no_states.calculate_nanoparticle_properties(pmb)
 
     def test_nanoparticle_instance_and_io_roundtrip(self):
+        """
+        Unit test: verify nanoparticle instance validation and I/O roundtrip.
+
+        Notes:
+            - Confirms serialized nanoparticle templates and instances load back
+            correctly from disk.
+        """
         pmb = self._build_pmb_with_particles()
         pmb.define_nanoparticle(name="np",
                                 core_particle_name="core",
