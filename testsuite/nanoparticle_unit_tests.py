@@ -19,6 +19,8 @@
 
 import unittest as ut
 import tempfile
+import math
+from unittest.mock import patch
 
 import espressomd
 import pyMBE
@@ -533,6 +535,283 @@ class TestNanoparticleCreation(ut.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         self.assertGreater(len(captured2.getvalue()), 0)
+
+
+class TestRelaxNanoparticleOverlaps(ut.TestCase):
+    """Tests for relax_nanoparticle_overlaps in nanoparticle_tools."""
+
+    def setUp(self):
+        espresso_system.part.clear()
+
+    def _build_pmb(self):
+        """
+        Build a pyMBE object for overlap-relaxation tests.
+
+        Particle setup:
+            - ``np_core``: sigma=1, offset=3 (mimics nanoparticle core with
+              diameter=4, i.e. offset = diameter - sigma = 4 - 1).
+            - ``np_ion``:  sigma=1, offset=0 (small salt ion).
+            - ``np_site``: sigma=0, acidic (excluded from LJ automatically).
+
+        Lorentz-Berthelot target offsets derived at test time from
+        ``pmb.get_lj_parameters``; no expected value is hardcoded in the tests.
+        """
+        pmb = pyMBE.pymbe_library(seed=42)
+        pmb.define_particle(
+            name="np_core",
+            z=0,
+            sigma=1.0 * pmb.units("reduced_length"),
+            epsilon=1.0 * pmb.units("reduced_energy"),
+            offset=3.0 * pmb.units("reduced_length"),
+            cutoff=2 ** (1 / 6) * pmb.units("reduced_length"),
+        )
+        pmb.define_particle(
+            name="np_ion",
+            z=1,
+            sigma=1.0 * pmb.units("reduced_length"),
+            epsilon=1.0 * pmb.units("reduced_energy"),
+        )
+        pmb.define_particle(
+            name="np_site",
+            acidity="acidic",
+            pka=4.0,
+            sigma=0.0 * pmb.units("reduced_length"),
+            epsilon=1.0 * pmb.units("reduced_energy"),
+        )
+        pmb.define_nanoparticle(
+            name="np",
+            core_particle_name="np_core",
+            total_number_of_sites=4,
+            primary_site_particle_name="np_site",
+            fraction_primary_sites=1.0,
+            number_of_patches_of_primary_sites=1,
+            secondary_site_particle_name=None,
+        )
+        return pmb
+
+    def _get_max_target_offset(self, pmb, core_name):
+        """Return the largest Lorentz-Berthelot offset involving the core particle."""
+        max_target = 0.0
+        for name in pmb.db.get_templates("particle"):
+            lj = pmb.get_lj_parameters(core_name, name)
+            if lj:
+                val = lj["offset"].to("reduced_length").magnitude
+                if val > max_target:
+                    max_target = val
+        return max_target
+
+    def test_final_offsets_match_lj_targets(self):
+        """
+        Unit test: after relax_nanoparticle_overlaps the ESPResSo LJ offset for
+        core-core and core-ion pairs must equal the Lorentz-Berthelot targets
+        returned by pmb.get_lj_parameters.
+
+        Notes:
+            - relax_espresso_system is mocked to isolate the LJ-setting logic
+              from actual MD integration.
+        """
+        pmb = self._build_pmb()
+        pmb.setup_lj_interactions(espresso_system=espresso_system)
+        type_map  = pmb.get_type_map()
+        core_type = type_map["np_core"]
+        ion_type  = type_map["np_ion"]
+        target_cc = pmb.get_lj_parameters("np_core", "np_core")["offset"].to("reduced_length").magnitude
+        target_ci = pmb.get_lj_parameters("np_core", "np_ion")["offset"].to("reduced_length").magnitude
+
+        with patch("pyMBE.lib.handy_functions.relax_espresso_system"):
+            nanoparticle_tools.relax_nanoparticle_overlaps(
+                espresso_system=espresso_system,
+                pmb=pmb,
+                nanoparticle_name="np",
+                seed=42,
+            )
+
+        params_cc = espresso_system.non_bonded_inter[core_type, core_type].lennard_jones.get_params()
+        params_ci = espresso_system.non_bonded_inter[core_type, ion_type].lennard_jones.get_params()
+        self.assertAlmostEqual(params_cc["offset"], target_cc)
+        self.assertAlmostEqual(params_ci["offset"], target_ci)
+
+    def test_core_ion_offset_never_exceeds_per_pair_target(self):
+        """
+        Unit test: during the growth loop the core-ion offset must be clamped at
+        its per-pair Lorentz-Berthelot target even while the global counter climbs
+        toward the core-core target.  The last relax call (final pass) must receive
+        the exact per-pair target.
+
+        Notes:
+            - relax_espresso_system is mocked with a side_effect that records the
+              core-ion LJ offset in ESPResSo at each call.
+            - The per-pair target is derived from pmb.get_lj_parameters, not
+              hardcoded.
+        """
+        pmb = self._build_pmb()
+        pmb.setup_lj_interactions(espresso_system=espresso_system)
+        type_map  = pmb.get_type_map()
+        core_type = type_map["np_core"]
+        ion_type  = type_map["np_ion"]
+        target_ci = pmb.get_lj_parameters("np_core", "np_ion")["offset"].to("reduced_length").magnitude
+
+        captured_ci = []
+
+        def capture(*args, **kwargs):
+            p = espresso_system.non_bonded_inter[core_type, ion_type].lennard_jones.get_params()
+            captured_ci.append(p["offset"])
+
+        with patch("pyMBE.lib.handy_functions.relax_espresso_system", side_effect=capture):
+            nanoparticle_tools.relax_nanoparticle_overlaps(
+                espresso_system=espresso_system,
+                pmb=pmb,
+                nanoparticle_name="np",
+                seed=42,
+                delta_offset=0.5,
+            )
+
+        self.assertGreater(len(captured_ci), 0)
+        for offset in captured_ci:
+            self.assertLessEqual(offset, target_ci + 1e-10,
+                                 msg=f"Core-ion offset {offset:.4f} exceeded per-pair target {target_ci:.4f}")
+        self.assertAlmostEqual(captured_ci[-1], target_ci,
+                               msg="Final relax call must receive the exact per-pair target offset")
+
+    def test_sigma_zero_site_particles_not_touched(self):
+        """
+        Unit test: particles with sigma=0 must be excluded from the LJ growth
+        loop.  After the call, the ESPResSo LJ sigma for every core-site type
+        pair must remain 0.
+
+        Notes:
+            - Both protonated and deprotonated state types of ``np_site`` are
+              found via the type_map (keys containing ``np_site``).
+            - relax_espresso_system is mocked to isolate the LJ-setting logic.
+        """
+        pmb = self._build_pmb()
+        pmb.setup_lj_interactions(espresso_system=espresso_system)
+        type_map   = pmb.get_type_map()
+        core_type  = type_map["np_core"]
+        site_types = [t for k, t in type_map.items() if "np_site" in k]
+
+        with patch("pyMBE.lib.handy_functions.relax_espresso_system"):
+            nanoparticle_tools.relax_nanoparticle_overlaps(
+                espresso_system=espresso_system,
+                pmb=pmb,
+                nanoparticle_name="np",
+                seed=42,
+            )
+
+        for site_type in site_types:
+            params = espresso_system.non_bonded_inter[core_type, site_type].lennard_jones.get_params()
+            self.assertAlmostEqual(params["sigma"], 0.0,
+                                   msg=f"Core-site LJ sigma must stay 0 for site ESPResSo type {site_type}")
+
+    def test_thermostat_off_after_completion(self):
+        """
+        Unit test: the Langevin thermostat must be OFF when
+        relax_nanoparticle_overlaps returns, consistent with the documented
+        behavior of relax_espresso_system.
+
+        Notes:
+            - relax_espresso_system is NOT mocked: the real function must run so
+              the thermostat state can be inspected.
+            - delta_offset is set to the full max_target so a single loop
+              iteration plus the final pass (2 MD runs) keeps the test fast.
+        """
+        pmb = self._build_pmb()
+        espresso_system.time_step = 0.001
+        espresso_system.cell_system.skin = 0.4
+        pmb.setup_lj_interactions(espresso_system=espresso_system)
+        espresso_system.thermostat.set_langevin(kT=1.0, gamma=0.1, seed=42)
+        max_target = self._get_max_target_offset(pmb, "np_core")
+
+        nanoparticle_tools.relax_nanoparticle_overlaps(
+            espresso_system=espresso_system,
+            pmb=pmb,
+            nanoparticle_name="np",
+            seed=42,
+            delta_offset=max_target,   # single loop iteration + final pass
+        )
+
+        self.assertIsNone(espresso_system.thermostat.kT,
+                          "Thermostat must be OFF after relax_nanoparticle_overlaps")
+
+    def test_no_relax_calls_when_no_valid_lj_pairs(self):
+        """
+        Unit test: when every particle (including the core) has sigma=0,
+        target_lj is empty and the function must return early without ever
+        calling relax_espresso_system.
+        """
+        pmb = pyMBE.pymbe_library(seed=42)
+        pmb.define_particle(
+            name="core_zero",
+            z=0,
+            sigma=0.0 * pmb.units("reduced_length"),
+            epsilon=1.0 * pmb.units("reduced_energy"),
+        )
+        pmb.define_particle(
+            name="site_zero",
+            acidity="acidic",
+            pka=4.0,
+            sigma=0.0 * pmb.units("reduced_length"),
+            epsilon=1.0 * pmb.units("reduced_energy"),
+        )
+        pmb.define_nanoparticle(
+            name="np_zero",
+            core_particle_name="core_zero",
+            total_number_of_sites=2,
+            primary_site_particle_name="site_zero",
+            fraction_primary_sites=1.0,
+            number_of_patches_of_primary_sites=1,
+            secondary_site_particle_name=None,
+        )
+        pmb.setup_lj_interactions(espresso_system=espresso_system)
+
+        with patch("pyMBE.lib.handy_functions.relax_espresso_system") as mock_relax:
+            nanoparticle_tools.relax_nanoparticle_overlaps(
+                espresso_system=espresso_system,
+                pmb=pmb,
+                nanoparticle_name="np_zero",
+                seed=42,
+            )
+
+        mock_relax.assert_not_called()
+
+    def test_verbose_prints_one_line_per_loop_iteration(self):
+        """
+        Unit test: with verbose=True a progress line containing "offset" must be
+        printed for each iteration of the growth loop, no more and no less.
+
+        Notes:
+            - The expected line count is derived from max_target and delta_offset
+              so the test stays correct if _build_pmb changes the particle offset.
+            - relax_espresso_system is mocked to prevent MD logging from
+              contaminating the captured output.
+        """
+        import io, sys
+        pmb = self._build_pmb()
+        pmb.setup_lj_interactions(espresso_system=espresso_system)
+        delta_offset = 0.5
+        max_target = self._get_max_target_offset(pmb, "np_core")
+        expected_iterations = math.ceil(max_target / delta_offset)
+
+        captured = io.StringIO()
+        with patch("pyMBE.lib.handy_functions.relax_espresso_system"):
+            sys.stdout = captured
+            try:
+                nanoparticle_tools.relax_nanoparticle_overlaps(
+                    espresso_system=espresso_system,
+                    pmb=pmb,
+                    nanoparticle_name="np",
+                    seed=42,
+                    delta_offset=delta_offset,
+                    verbose=True,
+                )
+            finally:
+                sys.stdout = sys.__stdout__
+
+        lines = [l for l in captured.getvalue().splitlines() if l.strip()]
+        self.assertEqual(len(lines), expected_iterations,
+                         f"Expected {expected_iterations} progress lines, got {len(lines)}")
+        for line in lines:
+            self.assertIn("offset", line.lower())
 
 
 if __name__ == "__main__":

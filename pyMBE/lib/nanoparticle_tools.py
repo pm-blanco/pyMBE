@@ -298,3 +298,100 @@ def calculate_quadrupole_moment(charges, positions):
     quadrupole_magnitude = np.linalg.norm(Q)
     eigenvalues, _ = np.linalg.eigh(Q)
     return Q, quadrupole_magnitude, eigenvalues
+
+
+def relax_nanoparticle_overlaps(espresso_system, pmb, nanoparticle_name, seed,
+                                delta_offset=0.5, verbose=False):
+    """
+    Gradually grows the LJ offset of the nanoparticle core particle against all
+    other non-site particles from zero to its target value, relaxing the system
+    after each increment.
+
+    This avoids hard overlaps between the nanoparticle core and salt ions that
+    arise at high salt concentrations when the full offset is applied immediately.
+    Must be called after :func:`pyMBE.pymbe_library.setup_lj_interactions`, which
+    registers the target LJ parameters in ESPResSo.
+
+    Args:
+        espresso_system ('espressomd.system.System'):
+            ESPResSo system object.
+
+        pmb ('pyMBE.pymbe_library'):
+            Active pyMBE object with a populated database.
+
+        nanoparticle_name ('str'):
+            Name of the nanoparticle template in the pyMBE database.
+
+        seed ('int'):
+            Random seed forwarded to :func:`~pyMBE.lib.handy_functions.relax_espresso_system`.
+
+        delta_offset ('float', optional):
+            Offset increment per iteration in reduced length units. Defaults to 0.5.
+
+        verbose ('bool', optional):
+            If True, prints progress after each relaxation step. Defaults to False.
+
+    Notes:
+        - The Langevin thermostat is left OFF on exit, consistent with
+          :func:`~pyMBE.lib.handy_functions.relax_espresso_system`.
+        - Re-initialize the thermostat after this call before starting production MD.
+    """
+    from pyMBE.lib.handy_functions import relax_espresso_system
+
+    # Identify core particle and its ESPResSo type
+    np_tpl = pmb.db.get_template(name=nanoparticle_name, pmb_type="nanoparticle")
+    core_name = np_tpl.core_particle_name
+    type_map = pmb.get_type_map()
+    core_type = type_map[core_name]
+
+    # Collect target LJ parameters for core vs every other particle type.
+    # Pairs involving particles with sigma=0 (sites) return {} and are skipped.
+    particle_templates = pmb.db.get_templates("particle")
+    target_lj = {}  # {other_es_type: lj_params_dict}
+    for name in particle_templates:
+        lj_params = pmb.get_lj_parameters(core_name, name)
+        if not lj_params:
+            continue
+        for state in pmb.db.get_particle_states_templates(particle_name=name).values():
+            target_lj[state.es_type] = lj_params
+
+    if not target_lj:
+        return
+
+    # Maximum target offset drives the loop (core-core is the largest pair)
+    max_target = max(p["offset"].to("reduced_length").magnitude for p in target_lj.values())
+
+    # Reset all core-particle offsets to zero before growing
+    for other_type, lj in target_lj.items():
+        espresso_system.non_bonded_inter[core_type, other_type].lennard_jones.set_params(
+            epsilon=lj["epsilon"].to("reduced_energy").magnitude,
+            sigma=lj["sigma"].to("reduced_length").magnitude,
+            cutoff=lj["cutoff"].to("reduced_length").magnitude,
+            offset=0.0,
+            shift="auto")
+
+    current_offset = 0.0
+    while current_offset < max_target:
+        for other_type, lj in target_lj.items():
+            per_pair_target = lj["offset"].to("reduced_length").magnitude
+            setup_offset = min(current_offset, per_pair_target)
+            espresso_system.non_bonded_inter[core_type, other_type].lennard_jones.set_params(
+                epsilon=lj["epsilon"].to("reduced_energy").magnitude,
+                sigma=lj["sigma"].to("reduced_length").magnitude,
+                cutoff=lj["cutoff"].to("reduced_length").magnitude,
+                offset=setup_offset,
+                shift="auto")
+        relax_espresso_system(espresso_system=espresso_system, seed=seed)
+        if verbose:
+            print(f"Growing NP core offset: {current_offset:.2f} / {max_target:.2f} (reduced length)")
+        current_offset += delta_offset
+
+    # Final pass: restore exact target offsets and do one last relaxation
+    for other_type, lj in target_lj.items():
+        espresso_system.non_bonded_inter[core_type, other_type].lennard_jones.set_params(
+            epsilon=lj["epsilon"].to("reduced_energy").magnitude,
+            sigma=lj["sigma"].to("reduced_length").magnitude,
+            cutoff=lj["cutoff"].to("reduced_length").magnitude,
+            offset=lj["offset"].to("reduced_length").magnitude,
+            shift="auto")
+    relax_espresso_system(espresso_system=espresso_system, seed=seed)

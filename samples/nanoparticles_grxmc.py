@@ -25,7 +25,7 @@ from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
 from pyMBE.lib.handy_functions import do_reaction, setup_electrostatic_interactions, relax_espresso_system, generate_lattice_positions
-from pyMBE.lib.nanoparticle_tools import get_nanoparticle_properties, print_nanoparticle_properties
+from pyMBE.lib.nanoparticle_tools import get_nanoparticle_properties, print_nanoparticle_properties, relax_nanoparticle_overlaps
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -60,7 +60,6 @@ frames_path.mkdir(parents=True, exist_ok=True)
 
 # Simulation parameters
 verbose = args.no_verbose
-pmb.set_reduced_units(unit_length=0.4*pmb.units.nm)
 N_samples           = 1000	# to make the demonstration quick, we set this to a very low value
 MD_steps_per_sample = 1000
 N_samples_print     = 1	# Write the trajectory every 100 samples
@@ -71,10 +70,10 @@ pH_value= args.pH
 ideal = False # Set to True to not consider electrostatic interactions in the system, and only sample the reactions
 
 # Nanoparticle parameters
-vol_frac_of_nanoparticles = 0.1		# Volume fraction of the nanoparticle
-number_of_nanoparticles   = 20      # Total number of the nanoparticles
-nanoparticle_diameter     = 4*pmb.units.reduced_length		# Diameter of the nanoparticle in reduced units
-total_number_of_sites     = 10		# Equivalent to 0.2 sites/reduced_length^2 for a diameter-4 nanoparticle
+vol_frac_of_nanoparticles = 0.1		                   # Volume fraction of the nanoparticle
+number_of_nanoparticles   = 20                         # Total number of the nanoparticles
+nanoparticle_diameter     = 4*pmb.units.reduced_length # Diameter of the nanoparticle in reduced units
+total_number_of_sites     = 10		                   # Total number of the sites on the nanoparticle
 pka_A_site                = 4.0
 pka_B_site                = 10.0
 nanoparticle_lattice_type = "fcc"
@@ -90,9 +89,10 @@ sites_distribution = {"main"     : {"particle_name"     : A_site,
                                     "number_of_patches" : 2},
                       "secondary": {"particle_name"     : B_site}}
 
-# LJ parameters for the nanoparticles
+# LJ parameters
 sigma_core_particle = 1*pmb.units('reduced_length')
-sigma_sites        = 0*pmb.units('reduced_length')
+sigma_small_ions    = 1*pmb.units('reduced_length')
+sigma_sites         = 0*pmb.units('reduced_length')
 epsilon = 1*pmb.units('reduced_energy')
 offset_core_particle = nanoparticle_diameter-sigma_core_particle
 cutoff_core_particle = 2**(1/6)*sigma_core_particle
@@ -137,7 +137,7 @@ pmb.define_nanoparticle(name                               = nanoparticle_name,
 
 # Saline solution parameters
 
-c_salt = 5e-3 * pmb.units.mol/ pmb.units.L
+c_salt = 1e-3 * pmb.units.mol/ pmb.units.L
 
 if args.mode == 'standard':
     proton_name    = 'Hplus'
@@ -147,34 +147,32 @@ if args.mode == 'standard':
 
     pmb.define_particle(name    = proton_name, 
                         z       = 1, 
-                        sigma   = 0.35*pmb.units.nm, 
-                        epsilon = 1*pmb.units('reduced_energy'))
+                        sigma   = sigma_small_ions, 
+                        epsilon = epsilon)
     pmb.define_particle(name    = hydroxide_name,  
                         z       = -1,  
-                        sigma   = 0.35*pmb.units.nm,  
-                        epsilon = 1*pmb.units('reduced_energy'))
+                        sigma   = sigma_small_ions,  
+                        epsilon = epsilon)
     pmb.define_particle(name    = sodium_name, 
                         z       = 1, 
-                        sigma   = 0.35*pmb.units.nm, 
-                        epsilon = 1*pmb.units('reduced_energy'))
+                        sigma   = sigma_small_ions, 
+                        epsilon = epsilon)
     pmb.define_particle(name    = chloride_name,  
                         z       = -1, 
-                        sigma   = 0.35*pmb.units.nm,  
-                        epsilon = 1*pmb.units('reduced_energy'))
-
+                        sigma   = sigma_small_ions,  
+                        epsilon = epsilon)
 elif args.mode == 'unified':
     cation_name = 'Na'
     anion_name  = 'Cl'
 
     pmb.define_particle(name    = cation_name, 
                         z       = 1, 
-                        sigma   = 0.35*pmb.units.nm, 
-                        epsilon = 1*pmb.units('reduced_energy'))
+                        sigma   = sigma_small_ions, 
+                        epsilon = epsilon)
     pmb.define_particle(name    = anion_name,  
                         z       = -1, 
-                        sigma   = 0.35*pmb.units.nm,  
-                        epsilon = 1*pmb.units('reduced_energy'))
-
+                        sigma   = sigma_small_ions,  
+                        epsilon = epsilon)
 # System parameters
 properties            = get_nanoparticle_properties(pmb, nanoparticle_name)
 nanoparticle_volume   = properties["nanoparticle_volume"].to(pmb.units('reduced_length**3'))
@@ -206,7 +204,7 @@ if args.mode == 'standard':
     pmb.create_counterions(object_name=nanoparticle_name,
                            cation_name=proton_name,
                            anion_name=hydroxide_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 1
+                           espresso_system=espresso_system) # Create counterions for the nanoparticles
     c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                                               cation_name=sodium_name,
                                               anion_name=chloride_name,
@@ -215,7 +213,7 @@ elif args.mode == 'unified':
     pmb.create_counterions(object_name=nanoparticle_name, 
                            cation_name=cation_name,
                            anion_name=anion_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 1
+                           espresso_system=espresso_system) # Create counterions for the nanoparticles
     c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
                                               cation_name=cation_name,
                                               anion_name=anion_name,
@@ -286,9 +284,12 @@ if not ideal:
         print('Setup LJ interaction (this can take a few seconds)')
     pmb.setup_lj_interactions (espresso_system=espresso_system)
     if verbose:
-        print('Minimize energy before adding electrostatics')
-    relax_espresso_system(espresso_system=espresso_system,
-                          seed=langevin_seed)
+        print('Growing NP core offset to avoid overlaps with salt ions')
+    relax_nanoparticle_overlaps(espresso_system=espresso_system,
+                                pmb=pmb,
+                                nanoparticle_name=nanoparticle_name,
+                                seed=langevin_seed,
+                                verbose=verbose)
     if verbose:
         print('Setup and tune electrostatics (this can take a few seconds)')
     setup_electrostatic_interactions(units=pmb.units,
@@ -299,6 +300,12 @@ if not ideal:
         print('Minimize energy after adding electrostatics')
     relax_espresso_system(espresso_system=espresso_system,
                           seed=langevin_seed)
+
+# Restore Langevin thermostat for production MD (relax_espresso_system leaves it off)
+espresso_system.integrator.set_vv()
+espresso_system.thermostat.set_langevin(kT=pmb.kT.to('reduced_energy').magnitude,
+                                        gamma=0.1,
+                                        seed=langevin_seed)
 
 #Save the pyMBE dataframe in a CSV file
 #Save the pyMBE database
