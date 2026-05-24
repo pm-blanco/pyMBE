@@ -653,7 +653,7 @@ class TestRelaxNanoparticleOverlaps(ut.TestCase):
 
         captured_ci = []
 
-        def capture(*args, **kwargs):
+        def capture(*_args, **_kwargs):
             p = espresso_system.non_bonded_inter[core_type, ion_type].lennard_jones.get_params()
             captured_ci.append(p["offset"])
 
