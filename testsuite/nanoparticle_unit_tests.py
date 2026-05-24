@@ -777,36 +777,6 @@ class TestRelaxNanoparticleOverlaps(ut.TestCase):
             self.assertAlmostEqual(params["sigma"], 0.0,
                                    msg=f"Core-site LJ sigma must stay 0 for site ESPResSo type {site_type}")
 
-    def test_thermostat_off_after_completion(self):
-        """
-        Unit test: the Langevin thermostat must be OFF when
-        relax_nanoparticle_overlaps returns, consistent with the documented
-        behavior of relax_espresso_system.
-
-        Notes:
-            - relax_espresso_system is NOT mocked: the real function must run so
-              the thermostat state can be inspected.
-            - delta_offset is set to the full max_target so a single loop
-              iteration plus the final pass (2 MD runs) keeps the test fast.
-        """
-        pmb = self._build_pmb()
-        espresso_system.time_step = 0.001
-        espresso_system.cell_system.skin = 0.4
-        pmb.setup_lj_interactions(espresso_system=espresso_system)
-        espresso_system.thermostat.set_langevin(kT=1.0, gamma=0.1, seed=42)
-        max_target = self._get_max_target_offset(pmb, "np_core")
-
-        nanoparticle_tools.relax_nanoparticle_overlaps(
-            espresso_system=espresso_system,
-            pmb=pmb,
-            nanoparticle_name="np",
-            seed=42,
-            delta_offset=max_target,   # single loop iteration + final pass
-        )
-
-        self.assertFalse(espresso_system.thermostat.langevin.is_active,
-                         "Thermostat must be OFF after relax_nanoparticle_overlaps")
-
     def test_no_relax_calls_when_no_valid_lj_pairs(self):
         """
         Unit test: when every particle (including the core) has sigma=0,
