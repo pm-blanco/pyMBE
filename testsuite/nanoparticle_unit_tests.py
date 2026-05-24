@@ -730,8 +730,8 @@ class TestRelaxNanoparticleOverlaps(ut.TestCase):
             delta_offset=max_target,   # single loop iteration + final pass
         )
 
-        self.assertIsNone(espresso_system.thermostat.kT,
-                          "Thermostat must be OFF after relax_nanoparticle_overlaps")
+        self.assertFalse(espresso_system.thermostat.langevin.is_active,
+                         "Thermostat must be OFF after relax_nanoparticle_overlaps")
 
     def test_no_relax_calls_when_no_valid_lj_pairs(self):
         """
