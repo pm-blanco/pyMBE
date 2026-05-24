@@ -40,7 +40,7 @@ from pyMBE.storage.templates.protein import ProteinTemplate
 from pyMBE.storage.instances.protein import ProteinInstance
 from pyMBE.storage.templates.hydrogel import HydrogelTemplate, HydrogelNode, HydrogelChain
 from pyMBE.storage.instances.hydrogel import HydrogelInstance
-from pyMBE.storage.templates.nanoparticle import NanoparticleTemplate
+from pyMBE.storage.templates.patchy_nanoparticle import NanoparticleTemplate
 from pyMBE.storage.instances.nanoparticle import NanoparticleInstance
 from pyMBE.storage.templates.lj import LJInteractionTemplate
 
@@ -238,7 +238,7 @@ def _load_database_csv(db, folder):
                                            core_particle_name=row["core_particle_name"],
                                            total_number_of_sites=int(row["total_number_of_sites"]),
                                            primary_site_particle_name=row["primary_site_particle_name"],
-                                           fraction_primary_sites=float(row["fraction_primary_sites"]),
+                                           number_of_primary_sites_per_patch=int(row["number_of_primary_sites_per_patch"]),
                                            number_of_patches_of_primary_sites=int(row["number_of_patches_of_primary_sites"]),
                                            secondary_site_particle_name=secondary_site)
                 templates[tpl.name] = tpl
@@ -432,7 +432,7 @@ def _save_database_csv(db, folder):
                             "core_particle_name": tpl.core_particle_name,
                             "total_number_of_sites": tpl.total_number_of_sites,
                             "primary_site_particle_name": tpl.primary_site_particle_name,
-                            "fraction_primary_sites": tpl.fraction_primary_sites,
+                            "number_of_primary_sites_per_patch": tpl.number_of_primary_sites_per_patch,
                             "number_of_patches_of_primary_sites": tpl.number_of_patches_of_primary_sites,
                             "secondary_site_particle_name": tpl.secondary_site_particle_name if tpl.secondary_site_particle_name is not None else ""})
             # LJ TEMPLATE

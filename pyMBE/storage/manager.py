@@ -35,7 +35,7 @@ from pyMBE.storage.templates.protein import ProteinTemplate
 from pyMBE.storage.instances.protein import ProteinInstance
 from pyMBE.storage.templates.hydrogel import HydrogelTemplate
 from pyMBE.storage.instances.hydrogel import HydrogelInstance
-from pyMBE.storage.templates.nanoparticle import NanoparticleTemplate
+from pyMBE.storage.templates.patchy_nanoparticle import NanoparticleTemplate
 from pyMBE.storage.instances.nanoparticle import NanoparticleInstance
 from pyMBE.storage.templates.lj import LJInteractionTemplate
 from pyMBE.storage.pint_quantity import PintQuantity
@@ -370,7 +370,7 @@ class Manager:
                              "core_particle_name": tpl.core_particle_name,
                              "total_number_of_sites": tpl.total_number_of_sites,
                              "primary_site_particle_name": tpl.primary_site_particle_name,
-                             "fraction_primary_sites": tpl.fraction_primary_sites,
+                             "number_of_primary_sites_per_patch": tpl.number_of_primary_sites_per_patch,
                              "number_of_patches_of_primary_sites": tpl.number_of_patches_of_primary_sites,
                              "secondary_site_particle_name": tpl.secondary_site_particle_name})
             else:

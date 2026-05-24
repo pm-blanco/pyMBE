@@ -87,7 +87,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -146,7 +146,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -176,7 +176,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -210,7 +210,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
         tpl_two = pmb.db.get_template(pmb_type="nanoparticle", name="np_two")
@@ -226,7 +226,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=1.0,
+                                number_of_primary_sites_per_patch=3,
                                 number_of_patches_of_primary_sites=3,
                                 secondary_site_particle_name=None)
         tpl_three = pmb.db.get_template(pmb_type="nanoparticle", name="np_three")
@@ -244,7 +244,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=0,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=1.0,
+                                number_of_primary_sites_per_patch=0,
                                 number_of_patches_of_primary_sites=1,
                                 secondary_site_particle_name=None)
         tpl_zero = pmb.db.get_template(pmb_type="nanoparticle", name="np_zero")
@@ -259,7 +259,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -341,7 +341,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -355,7 +355,7 @@ class TestNanoparticleCreation(ut.TestCase):
         # NanoparticleTemplate validations (fraction and number of patches)
         tpl = pmb.db.get_template(pmb_type="nanoparticle", name="np")
         with self.assertRaises(ValueError):
-            tpl.copy(update={"fraction_primary_sites": -0.1}).calculate_nanoparticle_properties(pmb)
+            tpl.copy(update={"number_of_primary_sites_per_patch": -1}).calculate_nanoparticle_properties(pmb)
         with self.assertRaises(ValueError):
             tpl.copy(update={"number_of_patches_of_primary_sites": 0}).calculate_nanoparticle_properties(pmb)
 
@@ -372,7 +372,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=5,
                                 primary_site_particle_name="A_no_init",
-                                fraction_primary_sites=1.0,
+                                number_of_primary_sites_per_patch=5,
                                 number_of_patches_of_primary_sites=1,
                                 secondary_site_particle_name=None)
         tpl_no_init = pmb.db.get_template(pmb_type="nanoparticle", name="np_no_init_site")
@@ -389,7 +389,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core_no_init",
                                 total_number_of_sites=5,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=1.0,
+                                number_of_primary_sites_per_patch=5,
                                 number_of_patches_of_primary_sites=1,
                                 secondary_site_particle_name=None)
         tpl_bad_core = pmb.db.get_template(pmb_type="nanoparticle", name="np_bad_core")
@@ -407,7 +407,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=5,
                                 primary_site_particle_name="A_no_states",
-                                fraction_primary_sites=1.0,
+                                number_of_primary_sites_per_patch=5,
                                 number_of_patches_of_primary_sites=1,
                                 secondary_site_particle_name=None)
         tpl_no_states = pmb.db.get_template(pmb_type="nanoparticle", name="np_no_states_site")
@@ -427,7 +427,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -462,7 +462,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -507,7 +507,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 core_particle_name="core",
                                 total_number_of_sites=10,
                                 primary_site_particle_name="A",
-                                fraction_primary_sites=0.5,
+                                number_of_primary_sites_per_patch=2,
                                 number_of_patches_of_primary_sites=2,
                                 secondary_site_particle_name="B")
 
@@ -583,7 +583,7 @@ class TestRelaxNanoparticleOverlaps(ut.TestCase):
             core_particle_name="np_core",
             total_number_of_sites=4,
             primary_site_particle_name="np_site",
-            fraction_primary_sites=1.0,
+            number_of_primary_sites_per_patch=4,
             number_of_patches_of_primary_sites=1,
             secondary_site_particle_name=None,
         )
@@ -758,7 +758,7 @@ class TestRelaxNanoparticleOverlaps(ut.TestCase):
             core_particle_name="core_zero",
             total_number_of_sites=2,
             primary_site_particle_name="site_zero",
-            fraction_primary_sites=1.0,
+            number_of_primary_sites_per_patch=2,
             number_of_patches_of_primary_sites=1,
             secondary_site_particle_name=None,
         )

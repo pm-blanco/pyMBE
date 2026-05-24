@@ -42,9 +42,9 @@ class NanoparticleTemplate(PMBBaseModel):
         primary_site_particle_name ('str'):
             Name of the particle template used for the primary site type.
 
-        fraction_primary_sites ('float'):
-            Fraction of all surface sites assigned to the primary site type.
-            Expected range is typically between 0 and 1.
+        number_of_primary_sites_per_patch ('int'):
+            Number of primary-site particles in each patch.
+            Must be >= 0 (0 means no primary sites).
 
         number_of_patches_of_primary_sites ('int'):
             Number of surface patches that contain the primary site type.
@@ -59,7 +59,7 @@ class NanoparticleTemplate(PMBBaseModel):
     core_particle_name: str
     total_number_of_sites: int
     primary_site_particle_name: str
-    fraction_primary_sites: float
+    number_of_primary_sites_per_patch: int
     number_of_patches_of_primary_sites: int 
     secondary_site_particle_name: str | None = None
 
@@ -98,8 +98,8 @@ class NanoparticleTemplate(PMBBaseModel):
             - Primary-site counts are rounded to ensure an integer number of sites
               per patch and exact patch occupancy.
         """
-        if not (0.0 <= self.fraction_primary_sites <= 1.0):
-            raise ValueError("fraction_primary_sites must be between 0 and 1.")
+        if self.number_of_primary_sites_per_patch < 0:
+            raise ValueError("number_of_primary_sites_per_patch must be >= 0.")
         if self.number_of_patches_of_primary_sites <= 0:
             raise ValueError("number_of_patches_of_primary_sites must be > 0.")
 
@@ -129,24 +129,15 @@ class NanoparticleTemplate(PMBBaseModel):
         total_number_of_sites = self.total_number_of_sites
         real_surface_density_of_sites = total_number_of_sites / nanoparticle_surface_area
 
+        number_of_primary_sites_per_patch = self.number_of_primary_sites_per_patch
+        real_number_of_primary_sites = (
+            number_of_primary_sites_per_patch * self.number_of_patches_of_primary_sites
+        )
+
         if self.secondary_site_particle_name is None:
-            number_of_primary_sites = total_number_of_sites
-            number_of_primary_sites_per_patch = int(
-                np.round(number_of_primary_sites / self.number_of_patches_of_primary_sites)
-            )
-            real_number_of_primary_sites = (
-                number_of_primary_sites_per_patch * self.number_of_patches_of_primary_sites
-            )
             number_of_secondary_sites = 0
             secondary_site_charge_number = 0
         else:
-            number_of_primary_sites = int(np.round(total_number_of_sites * self.fraction_primary_sites))
-            number_of_primary_sites_per_patch = int(
-                np.round(number_of_primary_sites / self.number_of_patches_of_primary_sites)
-            )
-            real_number_of_primary_sites = (
-                number_of_primary_sites_per_patch * self.number_of_patches_of_primary_sites
-            )
             number_of_secondary_sites = total_number_of_sites - real_number_of_primary_sites
             secondary_site_charge_number = _get_initial_state_charge_number(
                 self.secondary_site_particle_name

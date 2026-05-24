@@ -36,7 +36,7 @@ from pyMBE.storage.templates.molecule import MoleculeTemplate
 from pyMBE.storage.templates.peptide import PeptideTemplate
 from pyMBE.storage.templates.protein import ProteinTemplate
 from pyMBE.storage.templates.hydrogel import HydrogelTemplate, HydrogelNode, HydrogelChain
-from pyMBE.storage.templates.nanoparticle import NanoparticleTemplate
+from pyMBE.storage.templates.patchy_nanoparticle import NanoparticleTemplate
 from pyMBE.storage.templates.bond import BondTemplate
 from pyMBE.storage.templates.lj import LJInteractionTemplate
 ## Instances
@@ -1688,7 +1688,7 @@ class pymbe_library():
                                chain_map=chains)
         self.db._register_template(tpl)
 
-    def define_nanoparticle(self, name, core_particle_name, total_number_of_sites, primary_site_particle_name, fraction_primary_sites, number_of_patches_of_primary_sites, secondary_site_particle_name=None):
+    def define_nanoparticle(self, name, core_particle_name, total_number_of_sites, primary_site_particle_name, number_of_primary_sites_per_patch, number_of_patches_of_primary_sites, secondary_site_particle_name=None):
         """
         Defines a nanoparticle template in the pyMBE database.
 
@@ -1706,8 +1706,8 @@ class pymbe_library():
             primary_site_particle_name ('str'):
                 Particle template used for the primary site type.
 
-            fraction_primary_sites ('float'):
-                Fraction of sites assigned to the primary site type.
+            number_of_primary_sites_per_patch ('int'):
+                Number of primary-site particles in each patch. Must be >= 0.
 
             number_of_patches_of_primary_sites ('int'):
                 Number of primary-site patches on the nanoparticle surface.
@@ -1721,7 +1721,7 @@ class pymbe_library():
                                    core_particle_name=core_particle_name,
                                    total_number_of_sites=total_number_of_sites,
                                    primary_site_particle_name=primary_site_particle_name,
-                                   fraction_primary_sites=fraction_primary_sites,
+                                   number_of_primary_sites_per_patch=number_of_primary_sites_per_patch,
                                    number_of_patches_of_primary_sites=number_of_patches_of_primary_sites,
                                    secondary_site_particle_name=secondary_site_particle_name)
         self.db._register_template(tpl)

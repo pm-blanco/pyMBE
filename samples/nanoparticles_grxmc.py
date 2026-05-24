@@ -73,7 +73,7 @@ ideal = False # Set to True to not consider electrostatic interactions in the sy
 vol_frac_of_nanoparticles = 0.1		                   # Volume fraction of the nanoparticle
 number_of_nanoparticles   = 20                         # Total number of the nanoparticles
 nanoparticle_diameter     = 4*pmb.units.reduced_length # Diameter of the nanoparticle in reduced units
-total_number_of_sites     = 10		                   # Total number of the sites on the nanoparticle
+total_number_of_sites     = 12		                   # Total number of the sites on the nanoparticle
 pka_A_site                = 4.0
 pka_B_site                = 10.0
 nanoparticle_lattice_type = "fcc"
@@ -84,10 +84,10 @@ A_site        = "A_site"
 B_site        = "B_site"
 
 # Patchy distribution of sites A and B
-sites_distribution = {"main"     : {"particle_name"     : A_site,
-                                    "fraction"          : 0.5,
-                                    "number_of_patches" : 2},
-                      "secondary": {"particle_name"     : B_site}}
+sites_distribution = {"primary"     : {"particle_name"                     : A_site,
+                                    "number_of_primary_sites_per_patch" : 2,
+                                    "number_of_patches"                 : 2},
+                      "secondary": {"particle_name"                     : B_site}}
 
 # LJ parameters
 sigma_core_particle = 1*pmb.units('reduced_length')
@@ -131,8 +131,8 @@ pmb.define_nanoparticle(name                               = nanoparticle_name,
                         core_particle_name                 = core_particle,
                         total_number_of_sites              = total_number_of_sites,
                         primary_site_particle_name         = A_site,
-                        fraction_primary_sites             = sites_distribution["main"]["fraction"],
-                        number_of_patches_of_primary_sites = sites_distribution["main"]["number_of_patches"],
+                        number_of_primary_sites_per_patch  = sites_distribution["primary"]["number_of_primary_sites_per_patch"],
+                        number_of_patches_of_primary_sites = sites_distribution["primary"]["number_of_patches"],
                         secondary_site_particle_name       = B_site)
 
 # Saline solution parameters
