@@ -240,7 +240,8 @@ def _load_database_csv(db, folder):
                                            primary_site_particle_name=row["primary_site_particle_name"],
                                            number_of_primary_sites_per_patch=int(row["number_of_primary_sites_per_patch"]),
                                            number_of_patches_of_primary_sites=int(row["number_of_patches_of_primary_sites"]),
-                                           secondary_site_particle_name=secondary_site)
+                                           secondary_site_particle_name=secondary_site,
+                                           angle_between_patches=float(row.get("angle_between_patches", 180.0)))
                 templates[tpl.name] = tpl
             elif pmb_type == "lj":
                 sigma_d = _decode(row["sigma"])
@@ -434,7 +435,8 @@ def _save_database_csv(db, folder):
                             "primary_site_particle_name": tpl.primary_site_particle_name,
                             "number_of_primary_sites_per_patch": tpl.number_of_primary_sites_per_patch,
                             "number_of_patches_of_primary_sites": tpl.number_of_patches_of_primary_sites,
-                            "secondary_site_particle_name": tpl.secondary_site_particle_name if tpl.secondary_site_particle_name is not None else ""})
+                            "secondary_site_particle_name": tpl.secondary_site_particle_name if tpl.secondary_site_particle_name is not None else "",
+                            "angle_between_patches": tpl.angle_between_patches})
             # LJ TEMPLATE
             elif pmb_type == "lj" and isinstance(tpl, LJInteractionTemplate):
                 rows.append({"name":   tpl.name,

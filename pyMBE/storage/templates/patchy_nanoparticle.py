@@ -53,6 +53,13 @@ class NanoparticleTemplate(PMBBaseModel):
             Optional particle template name for a secondary site type.
             If not provided, only a single site type is used.
 
+        angle_between_patches ('float'):
+            Angle in degrees between the two primary-site patch axes.
+            Only used when ``number_of_patches_of_primary_sites == 2``; for
+            more than two patches the patch centres are distributed uniformly
+            on the sphere (closest regular polyhedron vertices) and this
+            parameter is ignored. Defaults to 180.
+
     """
     pmb_type: str = Field(default="nanoparticle", frozen=True)
     name: str
@@ -60,8 +67,9 @@ class NanoparticleTemplate(PMBBaseModel):
     total_number_of_sites: int
     primary_site_particle_name: str
     number_of_primary_sites_per_patch: int
-    number_of_patches_of_primary_sites: int 
+    number_of_patches_of_primary_sites: int
     secondary_site_particle_name: str | None = None
+    angle_between_patches: float = 180.0
 
     def calculate_nanoparticle_properties(self, pmb):
         """
@@ -157,16 +165,19 @@ class NanoparticleTemplate(PMBBaseModel):
         surface_charge_density = total_charge / nanoparticle_surface_area
         volume_charge_density = total_charge / nanoparticle_volume
 
-        return {"nanoparticle_surface_area": nanoparticle_surface_area,
-                "nanoparticle_volume": nanoparticle_volume,
-                "total_number_of_sites": total_number_of_sites,
-                "real_surface_density_of_sites": real_surface_density_of_sites,
-                "number_of_primary_sites": real_number_of_primary_sites,
-                "number_of_primary_sites_per_patch": number_of_primary_sites_per_patch,
-                "number_of_secondary_sites": number_of_secondary_sites,
-                "real_fraction_primary_sites": real_fraction_primary_sites,
-                "primary_site_charge_number": primary_site_charge_number,
-                "secondary_site_charge_number": secondary_site_charge_number,
-                "total_charge": total_charge,
-                "surface_charge_density": surface_charge_density,
-                "volume_charge_density": volume_charge_density,}
+        properties = {"nanoparticle_surface_area": nanoparticle_surface_area,
+                      "nanoparticle_volume": nanoparticle_volume,
+                      "total_number_of_sites": total_number_of_sites,
+                      "real_surface_density_of_sites": real_surface_density_of_sites,
+                      "number_of_primary_sites": real_number_of_primary_sites,
+                      "number_of_primary_sites_per_patch": number_of_primary_sites_per_patch,
+                      "number_of_secondary_sites": number_of_secondary_sites,
+                      "real_fraction_primary_sites": real_fraction_primary_sites,
+                      "primary_site_charge_number": primary_site_charge_number,
+                      "secondary_site_charge_number": secondary_site_charge_number,
+                      "total_charge": total_charge,
+                      "surface_charge_density": surface_charge_density,
+                      "volume_charge_density": volume_charge_density}
+        if self.number_of_patches_of_primary_sites > 1:
+            properties["angle_between_patches"] = self.angle_between_patches
+        return properties

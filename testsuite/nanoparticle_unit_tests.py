@@ -264,7 +264,7 @@ class TestNanoparticleCreation(ut.TestCase):
                                 secondary_site_particle_name="B")
 
         original_helper = pmb._create_nanoparticle_sites_positions
-        pmb._create_nanoparticle_sites_positions = lambda nanoparticle_tpl: [
+        pmb._create_nanoparticle_sites_positions = lambda nanoparticle_tpl, **_kwargs: [
             {"particle_name": "A", "positions": [], "number_of_sites": 0},
             {"particle_name": "B", "positions": [[0.0, 0.0, 0.0]], "number_of_sites": 1},
         ]
@@ -535,6 +535,80 @@ class TestNanoparticleCreation(ut.TestCase):
         finally:
             sys.stdout = sys.__stdout__
         self.assertGreater(len(captured2.getvalue()), 0)
+
+
+    def test_angle_between_patches_ignored_for_more_than_two_patches(self):
+        """
+        Unit test: verify angle_between_patches does not affect site positions
+        when number_of_patches_of_primary_sites > 2.
+
+        Notes:
+            - For N > 2 patches, patch centres are placed at uniform polyhedron
+              vertices regardless of angle_between_patches.
+            - Two nanoparticles with different angle values must produce
+              identical site positions.
+        """
+        pmb_a = self._build_pmb_with_particles()
+        pmb_b = self._build_pmb_with_particles()
+
+        for pmb, angle in [(pmb_a, 90), (pmb_b, 140)]:
+            pmb.define_nanoparticle(name="np_multi",
+                                    core_particle_name="core",
+                                    total_number_of_sites=9,
+                                    primary_site_particle_name="A",
+                                    number_of_primary_sites_per_patch=3,
+                                    number_of_patches_of_primary_sites=3,
+                                    angle_between_patches=angle,
+                                    secondary_site_particle_name=None)
+
+        original_check = nanoparticle_tools.check_patch_overlaps
+        nanoparticle_tools.check_patch_overlaps = lambda sites_positions, number_patches: 0
+        try:
+            tpl_a = pmb_a.db.get_template(pmb_type="nanoparticle", name="np_multi")
+            tpl_b = pmb_b.db.get_template(pmb_type="nanoparticle", name="np_multi")
+            sites_a = pmb_a._create_nanoparticle_sites_positions(nanoparticle_tpl=tpl_a)
+            sites_b = pmb_b._create_nanoparticle_sites_positions(nanoparticle_tpl=tpl_b)
+        finally:
+            nanoparticle_tools.check_patch_overlaps = original_check
+
+        self.assertEqual(len(sites_a), len(sites_b))
+        for patch_a, patch_b in zip(sites_a, sites_b):
+            self.assertEqual(patch_a["number_of_sites"], patch_b["number_of_sites"])
+            self.assertEqual(patch_a["positions"], patch_b["positions"])
+
+    def test_angle_between_patches_not_in_properties_for_single_patch(self):
+        """
+        Unit test: angle_between_patches must not appear in properties when
+        number_of_patches_of_primary_sites == 1 (undefined geometry).
+        """
+        pmb = self._build_pmb_with_particles()
+        pmb.define_nanoparticle(name="np_one",
+                                core_particle_name="core",
+                                total_number_of_sites=5,
+                                primary_site_particle_name="A",
+                                number_of_primary_sites_per_patch=5,
+                                number_of_patches_of_primary_sites=1,
+                                secondary_site_particle_name=None)
+        properties = nanoparticle_tools.get_nanoparticle_properties(pmb, "np_one")
+        self.assertNotIn("angle_between_patches", properties)
+
+    def test_angle_between_patches_in_properties_for_two_patches(self):
+        """
+        Unit test: angle_between_patches must appear in properties when
+        number_of_patches_of_primary_sites == 2.
+        """
+        pmb = self._build_pmb_with_particles()
+        pmb.define_nanoparticle(name="np_two",
+                                core_particle_name="core",
+                                total_number_of_sites=10,
+                                primary_site_particle_name="A",
+                                number_of_primary_sites_per_patch=2,
+                                number_of_patches_of_primary_sites=2,
+                                angle_between_patches=140,
+                                secondary_site_particle_name=None)
+        properties = nanoparticle_tools.get_nanoparticle_properties(pmb, "np_two")
+        self.assertIn("angle_between_patches", properties)
+        self.assertAlmostEqual(properties["angle_between_patches"], 140)
 
 
 class TestRelaxNanoparticleOverlaps(ut.TestCase):

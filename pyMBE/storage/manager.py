@@ -372,7 +372,8 @@ class Manager:
                              "primary_site_particle_name": tpl.primary_site_particle_name,
                              "number_of_primary_sites_per_patch": tpl.number_of_primary_sites_per_patch,
                              "number_of_patches_of_primary_sites": tpl.number_of_patches_of_primary_sites,
-                             "secondary_site_particle_name": tpl.secondary_site_particle_name})
+                             "secondary_site_particle_name": tpl.secondary_site_particle_name,
+                             "angle_between_patches": tpl.angle_between_patches})
             else:
                 # Generic representation for other types
                 rows.append(tpl.dict())

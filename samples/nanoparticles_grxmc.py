@@ -70,13 +70,13 @@ pH_value= args.pH
 ideal = False # Set to True to not consider electrostatic interactions in the system, and only sample the reactions
 
 # Nanoparticle parameters
-vol_frac_of_nanoparticles = 0.1		                   # Volume fraction of the nanoparticle
-number_of_nanoparticles   = 20                         # Total number of the nanoparticles
-nanoparticle_diameter     = 4*pmb.units.reduced_length # Diameter of the nanoparticle in reduced units
-total_number_of_sites     = 12		                   # Total number of the sites on the nanoparticle
-pka_A_site                = 4.0
-pka_B_site                = 10.0
-nanoparticle_lattice_type = "fcc"
+vol_frac_of_nanoparticles   = 0.1		                   # Volume fraction of the nanoparticle
+number_of_nanoparticles     = 20                         # Total number of the nanoparticles
+nanoparticle_diameter       = 4*pmb.units.reduced_length # Diameter of the nanoparticle in reduced units
+total_number_of_sites       = 10		                   # Total number of the sites on the nanoparticle
+pka_A_site                  = 4.0
+pka_B_site                  = 10.0
+nanoparticle_lattice_type   = "fcc"
 
 # Names for the componentes of the nanoparticles
 core_particle = "core_particle"
@@ -84,9 +84,13 @@ A_site        = "A_site"
 B_site        = "B_site"
 
 # Patchy distribution of sites A and B
-sites_distribution = {"primary"     : {"particle_name"                     : A_site,
+# angle_between_patches is only used when number_of_patches == 2.
+# For number_of_patches > 2, patch centres are placed at the vertices of the
+# closest regular polyhedron and angle_between_patches is ignored.
+sites_distribution = {"primary"  : {"particle_name"                     : A_site,
                                     "number_of_primary_sites_per_patch" : 2,
-                                    "number_of_patches"                 : 2},
+                                    "number_of_patches"                 : 2,
+                                    "angle_between_patches"             : 140},
                       "secondary": {"particle_name"                     : B_site}}
 
 # LJ parameters
@@ -133,6 +137,7 @@ pmb.define_nanoparticle(name                               = nanoparticle_name,
                         primary_site_particle_name         = A_site,
                         number_of_primary_sites_per_patch  = sites_distribution["primary"]["number_of_primary_sites_per_patch"],
                         number_of_patches_of_primary_sites = sites_distribution["primary"]["number_of_patches"],
+                        angle_between_patches              = sites_distribution["primary"]["angle_between_patches"],
                         secondary_site_particle_name       = B_site)
 
 # Saline solution parameters

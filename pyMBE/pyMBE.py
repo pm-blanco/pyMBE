@@ -1202,7 +1202,7 @@ class pymbe_library():
                                     "number_of_sites": len(secondary_positions)})
         return sites_to_create
 
-    def create_nanoparticle(self, name, number_of_nanoparticles, espresso_system, list_core_particle_positions=None, fix=False):
+    def create_nanoparticle(self, name, number_of_nanoparticles, espresso_system, list_core_particle_positions=None, fix=False, tolerance=1e-6):
         """
         Creates one or more nanoparticles in an ESPResSo system using a nanoparticle
         template from the pyMBE database.
@@ -1223,6 +1223,9 @@ class pymbe_library():
 
             fix ('bool', optional):
                 If ``True``, all particles of each nanoparticle are created as fixed.
+
+            tolerance ('float', optional):
+                Numerical tolerance for site position calculations. Defaults to 1e-6.
 
         Returns:
             ('list' of 'int'):
@@ -1246,7 +1249,9 @@ class pymbe_library():
                     )
         nanoparticle_ids = []
         nanoparticle_tpl = self.db.get_template(name=name, pmb_type="nanoparticle")
-        site_patch_specs = self._create_nanoparticle_sites_positions(nanoparticle_tpl=nanoparticle_tpl)
+        site_patch_specs = self._create_nanoparticle_sites_positions(nanoparticle_tpl=nanoparticle_tpl,
+                                                                     tolerance=tolerance,
+                                                                     angle_between_patches=nanoparticle_tpl.angle_between_patches)
         for nanoparticle_index in range(number_of_nanoparticles):
             nanoparticle_id = self.db._propose_instance_id(pmb_type="nanoparticle")
             nanoparticle_ids.append(nanoparticle_id)
@@ -1688,7 +1693,7 @@ class pymbe_library():
                                chain_map=chains)
         self.db._register_template(tpl)
 
-    def define_nanoparticle(self, name, core_particle_name, total_number_of_sites, primary_site_particle_name, number_of_primary_sites_per_patch, number_of_patches_of_primary_sites, secondary_site_particle_name=None):
+    def define_nanoparticle(self, name, core_particle_name, total_number_of_sites, primary_site_particle_name, number_of_primary_sites_per_patch, number_of_patches_of_primary_sites, secondary_site_particle_name=None, angle_between_patches=180.0):
         """
         Defines a nanoparticle template in the pyMBE database.
 
@@ -1716,6 +1721,13 @@ class pymbe_library():
                 Optional particle template used for a secondary site type.
                 Defaults to None.
 
+            angle_between_patches ('float', optional):
+                Angle in degrees between the two primary-site patch axes.
+                Only used when ``number_of_patches_of_primary_sites == 2``; for
+                more than two patches the patch centres are distributed uniformly
+                on the sphere (closest regular polyhedron vertices) and this
+                parameter is ignored. Defaults to 180.
+
         """
         tpl = NanoparticleTemplate(name=name,
                                    core_particle_name=core_particle_name,
@@ -1723,7 +1735,8 @@ class pymbe_library():
                                    primary_site_particle_name=primary_site_particle_name,
                                    number_of_primary_sites_per_patch=number_of_primary_sites_per_patch,
                                    number_of_patches_of_primary_sites=number_of_patches_of_primary_sites,
-                                   secondary_site_particle_name=secondary_site_particle_name)
+                                   secondary_site_particle_name=secondary_site_particle_name,
+                                   angle_between_patches=angle_between_patches)
         self.db._register_template(tpl)
 
 
