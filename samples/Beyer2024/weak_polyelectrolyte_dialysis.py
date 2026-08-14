@@ -37,10 +37,6 @@ from pyMBE.lib import analysis
 pmb = pyMBE.pymbe_library(seed=42)
 
 # Load some functions from the handy_scripts library for convenience
-from pyMBE.lib.handy_functions import setup_electrostatic_interactions
-from pyMBE.lib.handy_functions import relax_espresso_system
-from pyMBE.lib.handy_functions import setup_langevin_dynamics
-from pyMBE.lib.handy_functions import do_reaction
 
 
 #######################################################
@@ -170,22 +166,25 @@ if verbose:
 #######################################################
 
 # Create an instance of an espresso system
-espresso_system = espressomd.System(box_l = [L.to('reduced_length').magnitude]*3)
+box_l=[L.to('reduced_length').magnitude]*3
+espresso_system = espressomd.System(box_l =box_l )
 espresso_system.time_step=dt
 espresso_system.cell_system.skin=0.4
 
 # Create molecules and ions in the espresso system
 pmb.create_molecule(name=polyacid_name, 
                     number_of_molecules=N_chains, 
-                    espresso_system=espresso_system)
+                    box_l=box_l)
 pmb.create_counterions(object_name=polyacid_name, 
                        cation_name=proton_name, 
                        anion_name=hydroxide_name, 
-                       espresso_system=espresso_system)
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system, 
+                       box_l=box_l)
+c_salt_calculated = pmb.create_added_salt(box_l=box_l, 
                                           cation_name=sodium_name, 
                                           anion_name=chloride_name, 
                                           c_salt=c_salt_res)
+pmb.set_simulation_engine(espresso_system)
+pmb.add_instances_to_engine()
 if verbose:
     print("Created molecules")
 
@@ -220,12 +219,12 @@ non_interacting_type = max(type_map.values())+1
 grxmc.set_non_interacting_type (type=non_interacting_type)
 
 #Set up the interactions
-pmb.setup_lj_interactions(espresso_system=espresso_system)
+pmb.setup_lj_interactions()
 
 # Relax the system
-relax_espresso_system(espresso_system=espresso_system, 
+pmb.simulation_engine.relax_espresso_system(
                       seed=langevin_seed)
-setup_langevin_dynamics(espresso_system=espresso_system, 
+pmb.simulation_engine.setup_langevin_dynamics(
                         kT = pmb.kT, 
                         seed = langevin_seed,
                         time_step=dt,
@@ -234,18 +233,17 @@ if verbose:
     print("Running warmup without electrostatics")
 for i in tqdm.trange(100, disable=not verbose):
     espresso_system.integrator.run(steps=1000)
-    do_reaction(grxmc, steps=1000)
+    pmb.simulation_engine.do_reaction(grxmc, steps=1000)
 
-setup_electrostatic_interactions(units=pmb.units,
-                                espresso_system=espresso_system,
+pmb.simulation_engine.setup_electrostatic_interactions(units=pmb.units,
                                 kT=pmb.kT,
                                 solvent_permittivity=solvent_permittivity,
                                 verbose=verbose)
 espresso_system.thermostat.turn_off()
-relax_espresso_system(espresso_system=espresso_system,
+pmb.simulation_engine.relax_espresso_system(
                       seed=langevin_seed,
                       max_displacement=0.01)
-setup_langevin_dynamics(espresso_system=espresso_system, 
+pmb.simulation_engine.setup_langevin_dynamics(
                         kT = pmb.kT, 
                         seed = langevin_seed,
                         time_step=dt,
@@ -259,7 +257,7 @@ else:
     N_warmup_loops = 100
 for i in tqdm.trange(N_warmup_loops, disable=not verbose):
     espresso_system.integrator.run(steps=1000)
-    do_reaction(grxmc, steps=100)
+    pmb.simulation_engine.do_reaction(grxmc, steps=100)
 
 # Main loop
 print("Started production run.")
@@ -275,11 +273,11 @@ else:
     N_production_loops = 100
 for i in tqdm.trange(N_production_loops, disable=not verbose):
     espresso_system.integrator.run(steps=1000)
-    do_reaction(grxmc, steps=100)
+    pmb.simulation_engine.do_reaction(grxmc, steps=100)
     # Measure time
     time_series["time"].append(espresso_system.time)
     # Measure degree of ionization
-    charge_dict=pmb.calculate_net_charge(espresso_system=espresso_system, 
+    charge_dict=pmb.calculate_net_charge(
                                          object_name=polyacid_name,
                                          pmb_type="molecule", 
                                          dimensionless=True)

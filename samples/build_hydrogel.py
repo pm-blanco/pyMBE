@@ -149,7 +149,7 @@ def define_hydrogel_with_angular_potential(espresso_system, include_crosslinker_
                         node_map=node_topology,
                         chain_map=chain_topology)
     hydrogel_id = pmb.create_hydrogel(name="simple_hydrogel",
-                                      espresso_system=espresso_system,
+                                      box_l=espresso_system.box_l,
                                       gen_angle=True)
     return pmb, hydrogel_id, lattice_builder
 

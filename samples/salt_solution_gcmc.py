@@ -29,11 +29,7 @@ import tqdm
 import pyMBE
 from pyMBE.lib import analysis
 #Import functions from handy_functions script 
-from pyMBE.lib.handy_functions import relax_espresso_system
-from pyMBE.lib.handy_functions import setup_electrostatic_interactions
-from pyMBE.lib.handy_functions import setup_langevin_dynamics
-from pyMBE.lib.handy_functions import get_number_of_particles
-from pyMBE.lib.handy_functions import do_reaction
+
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -94,15 +90,21 @@ volume = N_SALT_ION_PAIRS/(pmb.N_A*c_salt_res)
 L = volume ** (1./3.) # Side of the simulation box
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
+box_l= [L.to('reduced_length').magnitude]*3
+espresso_system=espressomd.System (box_l =box_l)
+pmb.set_simulation_engine(espresso_system)
+
 if verbose:
     print("Created espresso object")
 
 # Add salt
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
+c_salt_calculated = pmb.create_added_salt(box_l=box_l,
                                           cation_name=cation_name,
                                           anion_name=anion_name,
+                               
                                           c_salt=0.5*c_salt_res)
+pmb.add_instances_to_engine()
+
 if verbose:
     print("Added salt")
 
@@ -142,12 +144,12 @@ espresso_system.time_step = dt
 espresso_system.cell_system.skin=0.4
 if args.mode == "interacting":
     #Set up the short-range interactions
-    pmb.setup_lj_interactions(espresso_system=espresso_system)
+    pmb.setup_lj_interactions()
 
 # Minimzation
-relax_espresso_system(espresso_system=espresso_system,
+pmb.simulation_engine.relax_espresso_system(
                       seed=langevin_seed)
-setup_langevin_dynamics(espresso_system=espresso_system, 
+pmb.simulation_engine.setup_langevin_dynamics(
                         kT = pmb.kT, 
                         seed = langevin_seed,
                         time_step=dt,
@@ -157,18 +159,17 @@ if verbose:
     print("Running warmup without electrostatics")
 for i in tqdm.trange(100, disable=not verbose):
     espresso_system.integrator.run(steps=100)
-    do_reaction(RE, steps=100)
+    pmb.simulation_engine.do_reaction(RE, steps=100)
 
 if args.mode == "interacting":
-    setup_electrostatic_interactions(units=pmb.units,
-                                    espresso_system=espresso_system,
+    pmb.simulation_engine.setup_electrostatic_interactions(units=pmb.units,
                                     kT=pmb.kT,
                                     solvent_permittivity=solvent_permittivity)
 
 espresso_system.thermostat.turn_off()
-relax_espresso_system(espresso_system=espresso_system,
+pmb.simulation_engine.relax_espresso_system(
                       seed=langevin_seed)
-setup_langevin_dynamics(espresso_system=espresso_system, 
+pmb.simulation_engine.setup_langevin_dynamics(
                         kT = pmb.kT, 
                         seed = langevin_seed,
                         time_step=dt,
@@ -180,7 +181,7 @@ if verbose:
 N_warmup_loops = 100
 for i in tqdm.trange(N_warmup_loops, disable=not verbose):
     espresso_system.integrator.run(steps=100)
-    do_reaction(RE, steps=100)
+    pmb.simulation_engine.do_reaction(RE, steps=100)
 
 # Main loop
 print("Started production run.")
@@ -194,13 +195,13 @@ for label in labels_obs:
 N_production_loops = 100
 for i in tqdm.trange(N_production_loops, disable=not verbose):
     espresso_system.integrator.run(steps=100)
-    do_reaction(RE, steps=100)
+    pmb.simulation_engine.do_reaction(RE, steps=100)
 
     # Measure time
     time_series["time"].append(espresso_system.time)
 
     # Measure degree of ionization
-    number_of_ion_pairs = get_number_of_particles(espresso_system, type_map[cation_name])
+    number_of_ion_pairs = pmb.simulation_engine.get_number_of_particles(type_map[cation_name])
     time_series["c_salt"].append((number_of_ion_pairs/(volume * pmb.N_A)).magnitude)
 
 data_path = args.output

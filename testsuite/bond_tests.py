@@ -23,7 +23,8 @@ import unittest as ut
 import espressomd
 
 # Create an instance of pyMBE library
-espresso_system=espressomd.System (box_l = [10]*3)
+box_l=[10]*3
+espresso_system=espressomd.System (box_l = box_l)
 
 
 
@@ -90,14 +91,16 @@ class Test(ut.TestCase):
                         particle_pairs = [['A', 'A']])
         # Create two particles
         pids = pmb.create_particle(name="A",
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    number_of_particles=2)
 
         pmb.create_bond(particle_id1=pids[0],
                         particle_id2=pids[1],
-                        espresso_system=espresso_system,
                         use_default_bond=False)
         
+        pmb.set_simulation_engine(espresso_system)
+        pmb.add_instances_to_engine()
+
         bond_object = self.get_bond_object(particle_id_pair=pids)
         
         self.check_bond_setup(bond_object=bond_object,
@@ -106,10 +109,9 @@ class Test(ut.TestCase):
         # Clean-up database
         for inst_id in pids:
             pmb.delete_instances_in_system(instance_id=inst_id,
-                                           pmb_type="particle",
-                                           espresso_system=espresso_system)
+                                           pmb_type="particle")
         pid_A = pmb.create_particle(name="A",
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    number_of_particles=1)
 
         harmonic_params_test = {'r_0'    : 0.5 * pmb.units.nm,
@@ -119,7 +121,7 @@ class Test(ut.TestCase):
                 particle_pairs = [['A', 'B']])
         
         pid_B = pmb.create_particle(name="B",
-                                    espresso_system=espresso_system,
+                                    box_l=box_l,
                                     number_of_particles=1)
         
         # Test that the bond is properly setup when there is a default bond
@@ -128,9 +130,10 @@ class Test(ut.TestCase):
 
         pmb.create_bond(particle_id1=pid_B[0],
                         particle_id2=pid_A[0],
-                        espresso_system=espresso_system,
                         use_default_bond=True)
         
+        pmb.add_instances_to_engine()
+
         bond_object = self.get_bond_object(particle_id_pair=[pid_B[0],pid_A[0]])
         
         self.check_bond_setup(bond_object=bond_object,
@@ -139,8 +142,7 @@ class Test(ut.TestCase):
         # Clean-up database
         for inst_id in pid_B+pid_A:
             pmb.delete_instances_in_system(instance_id=inst_id,
-                                           pmb_type="particle",
-                                           espresso_system=espresso_system)
+                                           pmb_type="particle")
         pmb.db.delete_templates(pmb_type="bond")
         
         # Test setup of FENE bonds
@@ -149,14 +151,15 @@ class Test(ut.TestCase):
                         particle_pairs = [['A', 'A']])
         # Create two particles
         pids = pmb.create_particle(name="A",
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    number_of_particles=2)
 
         pmb.create_bond(particle_id1=pids[0],
                         particle_id2=pids[1],
-                        espresso_system=espresso_system,
                         use_default_bond=False)
         
+        pmb.add_instances_to_engine()
+
         bond_object = self.get_bond_object(particle_id_pair=pids)
         
         self.check_bond_setup(bond_object=bond_object,
@@ -165,10 +168,9 @@ class Test(ut.TestCase):
         # Clean-up database
         for inst_id in pids:
             pmb.delete_instances_in_system(instance_id=inst_id,
-                                           pmb_type="particle",
-                                           espresso_system=espresso_system)
+                                           pmb_type="particle")
         pid_A = pmb.create_particle(name="A",
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    number_of_particles=1)
 
         FENE_params_test =  {'r_0'    : 0.5 * pmb.units.nm,
@@ -179,7 +181,7 @@ class Test(ut.TestCase):
                 particle_pairs = [['A', 'B']])
         
         pid_B = pmb.create_particle(name="B",
-                                    espresso_system=espresso_system,
+                                    box_l=box_l,
                                     number_of_particles=1)
         
         # Test that the FENE bond is properly setup when there is a default bond
@@ -188,9 +190,10 @@ class Test(ut.TestCase):
 
         pmb.create_bond(particle_id1=pid_B[0],
                         particle_id2=pid_A[0],
-                        espresso_system=espresso_system,
                         use_default_bond=True)
         
+        pmb.add_instances_to_engine()
+
         bond_object = self.get_bond_object(particle_id_pair=[pid_B[0],pid_A[0]])
         
         self.check_bond_setup(bond_object=bond_object,
@@ -199,8 +202,7 @@ class Test(ut.TestCase):
         # Clean-up database
         for inst_id in pid_B+pid_A:
             pmb.delete_instances_in_system(instance_id=inst_id,
-                                           pmb_type="particle",
-                                           espresso_system=espresso_system)
+                                           pmb_type="particle")
         
         pmb.db.delete_templates(pmb_type="bond")
         
@@ -209,14 +211,15 @@ class Test(ut.TestCase):
                                 bond_parameters = self.harmonic_params)
 
         pids = pmb.create_particle(name="A",
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    number_of_particles=2)
 
         pmb.create_bond(particle_id1=pids[0],
                         particle_id2=pids[1],
-                        espresso_system=espresso_system,
                         use_default_bond=True)
         
+        pmb.add_instances_to_engine()
+
         bond_object = self.get_bond_object(particle_id_pair=pids)
         
         self.check_bond_setup(bond_object=bond_object,
@@ -225,16 +228,15 @@ class Test(ut.TestCase):
         # Clean-up database
         for inst_id in pids:
             pmb.delete_instances_in_system(instance_id=inst_id,
-                                           pmb_type="particle",
-                                           espresso_system=espresso_system)
+                                           pmb_type="particle")
         pmb.db.delete_templates(pmb_type="bond")
         
         # Test setup of default bond when there are other bonds defined
         pid_A = pmb.create_particle(name="A",
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    number_of_particles=1)
         pid_B = pmb.create_particle(name="B",
-                                    espresso_system=espresso_system,
+                                    box_l=box_l,
                                     number_of_particles=1)
 
         pmb.define_default_bond(bond_type = "FENE",
@@ -245,9 +247,10 @@ class Test(ut.TestCase):
 
         pmb.create_bond(particle_id1=pid_B[0],
                         particle_id2=pid_A[0],
-                        espresso_system=espresso_system,
                         use_default_bond=True)
         
+        pmb.add_instances_to_engine()
+
         bond_object = self.get_bond_object(particle_id_pair=[pid_B[0],pid_A[0]])
         
         self.check_bond_setup(bond_object=bond_object,
@@ -256,9 +259,46 @@ class Test(ut.TestCase):
         # Clean-up database
         for inst_id in pid_B+pid_A:
             pmb.delete_instances_in_system(instance_id=inst_id,
-                                           pmb_type="particle",
-                                           espresso_system=espresso_system)
+                                           pmb_type="particle")
         pmb.db.delete_templates(pmb_type="bond")
+
+    def test_engine_check_bond_inputs(self):
+        """Test bond validation after migration to the ESPResSo engine."""
+        pmb = pyMBE.pymbe_library(seed=42)
+        self.define_templates(pmb)
+        pmb.set_simulation_engine(espresso_system)
+        engine = pmb.simulation_engine
+
+        engine._check_bond_inputs(
+            bond_type="harmonic", bond_parameters=self.harmonic_params)
+        engine._check_bond_inputs(
+            bond_type="FENE", bond_parameters=self.FENE_params)
+
+        with self.assertRaises(NotImplementedError):
+            engine._check_bond_inputs(
+                bond_type="Quartic", bond_parameters=self.harmonic_params)
+
+        with self.assertRaises(ValueError):
+            engine._check_bond_inputs(
+                bond_type="harmonic",
+                bond_parameters={"k": self.harmonic_params["k"]})
+        with self.assertRaises(ValueError):
+            engine._check_bond_inputs(
+                bond_type="harmonic",
+                bond_parameters={"r_0": self.harmonic_params["r_0"]})
+
+        with self.assertRaises(ValueError):
+            engine._check_bond_inputs(
+                bond_type="FENE",
+                bond_parameters={
+                    "r_0": self.FENE_params["r_0"],
+                    "d_r_max": self.FENE_params["d_r_max"]})
+        with self.assertRaises(ValueError):
+            engine._check_bond_inputs(
+                bond_type="FENE",
+                bond_parameters={
+                    "r_0": self.FENE_params["r_0"],
+                    "k": self.FENE_params["k"]})
 
     def test_bond_raised_exceptions(self):
         pmb = pyMBE.pymbe_library(seed=42)

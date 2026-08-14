@@ -68,7 +68,8 @@ pmb.define_molecule(name=molecule_name,
                     residue_list = ['R1']*2+['R2']*3)
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System(box_l = [10]*3)
+box_l=[10]*3
+espresso_system=espressomd.System(box_l = box_l )
 
 # Create your molecules into the espresso system
 
@@ -93,9 +94,10 @@ pmb.define_hydrogel("my_hydrogel",
                     node_topology, 
                     chain_topology)
 pmb.create_hydrogel(name="my_hydrogel",
-                    espresso_system=espresso_system,
-                    use_default_bond=True)
-
+                    use_default_bond=True,
+                    box_l=box_l)
+pmb.set_simulation_engine(espresso_system)
+pmb.add_instances_to_engine()
 class Test(ut.TestCase):
     def test_calculate_net_charge_with_units(self):
         """
@@ -104,16 +106,14 @@ class Test(ut.TestCase):
         
         # Check that it calculates properly the charge of the whole hydrogel
         charge_map = pmb.calculate_net_charge(object_name="my_hydrogel",
-                                        pmb_type="hydrogel",
-                                        espresso_system=espresso_system)
+                                        pmb_type="hydrogel")
 
         np.testing.assert_equal(charge_map["mean"], 40.0*pmb.units.Quantity(1,'reduced_charge'))
         np.testing.assert_equal(charge_map["instances"], {0: 40.0*pmb.units.Quantity(1,'reduced_charge')})
 
         # Check that it calculates properly the charge of the chains in the hydrogel
         charge_map = pmb.calculate_net_charge(object_name=molecule_name,
-                                              pmb_type="molecule",
-                                              espresso_system=espresso_system)
+                                              pmb_type="molecule")
         # Check mean charge
         np.testing.assert_equal(charge_map["mean"], 2.0*pmb.units.Quantity(1,'reduced_charge'))
         # Check molecule charge map
@@ -137,11 +137,9 @@ class Test(ut.TestCase):
 
         # Check that it calculates properly the charge of the residues in the hydrogel
         charge_map_r1 = pmb.calculate_net_charge(object_name="R1",
-                                                 pmb_type="residue",
-                                                 espresso_system=espresso_system)
+                                                 pmb_type="residue")
         charge_map_r2 = pmb.calculate_net_charge(object_name="R2",
-                                                 pmb_type="residue",
-                                                 espresso_system=espresso_system)
+                                                 pmb_type="residue")
         res_charge_map = charge_map_r1["instances"] | charge_map_r2["instances"]
         np.testing.assert_equal(res_charge_map[0], 1.0*pmb.units.Quantity(1,'reduced_charge'))
         np.testing.assert_equal(res_charge_map[1], 1.0*pmb.units.Quantity(1,'reduced_charge'))
@@ -157,14 +155,12 @@ class Test(ut.TestCase):
         # Check that it calculates properly the charge of the whole hydrogel
         charge_map = pmb.calculate_net_charge(object_name="my_hydrogel",
                                             pmb_type="hydrogel",
-                                            espresso_system=espresso_system,
                                             dimensionless=True)
         np.testing.assert_equal(charge_map["mean"], 40.0)
         np.testing.assert_equal(charge_map["instances"], {0: 40.0})
         # Check the case where the returned charge does not have a dimension
         charge_map = pmb.calculate_net_charge(object_name=molecule_name,
                                               pmb_type="molecule",
-                                              espresso_system=espresso_system,
                                               dimensionless=True)
         # Check mean charge
         np.testing.assert_equal(charge_map["mean"], 2.0)
@@ -188,11 +184,9 @@ class Test(ut.TestCase):
                                 15: 2.0})
         charge_map_r1 = pmb.calculate_net_charge(object_name="R1",
                                                  pmb_type="residue",
-                                                 espresso_system=espresso_system,
                                                  dimensionless=True)
         charge_map_r2 = pmb.calculate_net_charge(object_name="R2",
                                                  pmb_type="residue",
-                                                 espresso_system=espresso_system,
                                                  dimensionless=True)
         res_charge_map = charge_map_r1["instances"] | charge_map_r2["instances"]
         np.testing.assert_equal(res_charge_map[0], 1.0)

@@ -22,7 +22,8 @@ import pyMBE
 from pyMBE.lib import handy_functions as hf
 import unittest as ut
 
-espresso_system = espressomd.System(box_l = [100]*3)
+box_l=[100]*3
+espresso_system = espressomd.System(box_l = box_l)
 
 def build_peptide_in_espresso(seed):
     pmb = pyMBE.pymbe_library(seed=seed)
@@ -57,15 +58,17 @@ def build_peptide_in_espresso(seed):
     # Create molecule in the espresso system
     pmb.create_molecule(name=peptide_name, 
                         number_of_molecules=1, 
-                        espresso_system=espresso_system, 
+                        box_l=box_l, 
                         use_default_bond=True)
+    
+    pmb.set_simulation_engine(espresso_system)
+    pmb.add_instances_to_engine()
     # Extract positions of particles in the peptide
     particle_id_list = pmb.get_particle_id_map("generic_peptide")["all"]
     positions = []
     for pid in particle_id_list:
         positions.append(espresso_system.part.by_id(pid).pos)
-    pmb.delete_instances_in_system(espresso_system=espresso_system,
-                                   instance_id=0,
+    pmb.delete_instances_in_system(instance_id=0,
                                    pmb_type="peptide")
     return np.asarray(positions)
 

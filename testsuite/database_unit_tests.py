@@ -33,10 +33,30 @@ from pyMBE.storage.templates.angle import AngleTemplate
 from pyMBE.storage.templates.hydrogel import HydrogelNode
 from pyMBE.storage.pint_quantity import PintQuantity
 from pyMBE.storage.reactions.reaction import Reaction, ReactionParticipant
+from pydantic.error_wrappers import ValidationError
 import pint
-espresso_system=espressomd.System(box_l = [10]*3)
+import numpy as np
+box_l=[10]*3
+espresso_system=espressomd.System(box_l =box_l )
 
 class Test(ut.TestCase):
+    def test_label_id_map(self):
+        pmb = pyMBE.pymbe_library(seed=23)
+
+        self.assertEqual(pmb.db._get_label_id_map("particle"), "particle_map")
+        self.assertEqual(pmb.db._get_label_id_map("molecule"), "molecule_map")
+        self.assertEqual(pmb.db._get_label_id_map("hydrogel"), "assembly_map")
+
+    def test_particle_instance_position_is_nparray(self):
+        """Checks that is not possible to instantiate a particle instance with a list it is only possible with a numpy array.
+        """
+        
+        with self.assertRaises(ValidationError):
+            ParticleInstance(name="B",
+                                    particle_id=1,
+                                    initial_state="B",
+                                    position=[box_l[0]*0.5,box_l[1]*0.5,box_l[2]*0.5])
+        
 
     def test_sanity_hydrogel_node_template(self):
         """
@@ -77,7 +97,8 @@ class Test(ut.TestCase):
                             acidity="acidic")
         part_inst = ParticleInstance(name="A",
                                     particle_id=0,
-                                    initial_state="A")
+                                    initial_state="A",
+                                    position=np.array([box_l[0]*0.5,box_l[1]*0.5,box_l[2]*0.5]))
         pmb.db._register_instance(part_inst)
         inputs = {"instance": part_inst}
         self.assertRaises(ValueError,
@@ -85,7 +106,8 @@ class Test(ut.TestCase):
                           **inputs)
         templateless_part_inst = ParticleInstance(name="B",
                                     particle_id=1,
-                                    initial_state="B")
+                                    initial_state="B",
+                                    position=np.array([box_l[0]*0.5,box_l[1]*0.5,box_l[2]*0.5]))
         inputs = {"instance": templateless_part_inst}
         self.assertRaises(ValueError,
                           pmb.db._register_instance,
@@ -187,11 +209,12 @@ class Test(ut.TestCase):
         ## Calling the function deletes all instances of a given pmb_type
         part_inst = ParticleInstance(name="A",
                                     particle_id=1,
-                                    initial_state="A")
+                                    initial_state="A",
+                                    position=np.array([box_l[0]*0.5,box_l[1]*0.5,box_l[2]*0.5]))
         pmb.db._register_instance(part_inst)
         pmb.db.delete_instances(pmb_type="particle")
         assert "particle" not in pmb.db._instances.keys()
-        
+    
     def test_find_instance_ids(self):
         """
         Sanity test for `_find_instance_ids_by_attribute`
@@ -218,9 +241,9 @@ class Test(ut.TestCase):
         pmb.define_molecule(name="M1",
                             residue_list=["R1"]*2)
         pmb.create_molecule(name="M1",
-                            espresso_system=espresso_system,
                             number_of_molecules=1,
-                            use_default_bond=True)
+                            use_default_bond=True,
+                            box_l=box_l)
         instance_ids_r1 = pmb.db._find_instance_ids_by_attribute(pmb_type="particle",
                                                               attribute="residue_id",
                                                               value=0)
@@ -362,7 +385,8 @@ class Test(ut.TestCase):
         """
         inputs = {"name":"A",
                   "particle_id":-1,
-                   "initial_state":"A"}
+                   "initial_state":"A",
+                   "position":np.array([box_l[0]*0.5,box_l[1]*0.5,box_l[2]*0.5])}
         self.assertRaises(ValueError,
                           ParticleInstance,
                           **inputs)

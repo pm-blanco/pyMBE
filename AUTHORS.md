@@ -12,6 +12,7 @@ The following people have contributed to pyMBE (Github username, Name, current a
 - paobtorres, Paola B. Torres (Universidad Tecnológica Nacional, Argentina)
 - pinedaps, Sebastian P. Pineda (University of Lund, Sweden)
 - 1234somesh, Somesh Kurahatti (University of Stuttgart, Germany)
+- jorch28, Jordi Sans-Duñó (Freelance, Figaró, Spain)
 
 ## Tier-1 Contributors
 - TommyTraan, Duy Tommy Tran (Norwegian University of Science and Technology, Norway)

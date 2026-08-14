@@ -16,16 +16,16 @@ jobs:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
-        espresso:
-          - version: "4.2.2"
-            eessi_modules: ESPResSo/4.2.2-foss-2023b
+        software:
+          - label: "ESPResSo 4.2.2, LAMMPS 2024"
+            eessi_modules: ESPResSo/4.2.2-foss-2023b LAMMPS/29Aug2024-foss-2023b-kokkos
             eessi_stack_version: "2023.06"
             upload_artifact: true
-          - version: "5.0.1"
+          - label: "ESPResSo 5.0.1"
             eessi_modules: ESPResSo/5.0.1-foss-2025a
             eessi_stack_version: "2025.06"
             upload_artifact: false
-    name: ubuntu - ESPResSo ${{ matrix.espresso.version }}
+    name: ubuntu - ${{ matrix.software.label }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@main
@@ -36,12 +36,12 @@ jobs:
       - name: Setup EESSI
         uses: eessi/github-action-eessi@v3
         with:
-          eessi_stack_version: ${{ matrix.espresso.eessi_stack_version }}
+          eessi_stack_version: ${{ matrix.software.eessi_stack_version }}
       - name: Install dependencies
         uses: ./.github/actions/dependencies
         with:
           modules: |-
-            ${{ matrix.espresso.eessi_modules }}
+            ${{ matrix.software.eessi_modules }}
           extra-python-packages: |-
             pdoc==15.0.3
             pylint==3.0.3
@@ -58,7 +58,7 @@ jobs:
           make coverage_xml
         shell: bash
       - name: Upload artifact
-        if: ${{ matrix.espresso.upload_artifact }}
+        if: ${{ matrix.software.upload_artifact }}
         uses: actions/upload-artifact@v7
         with:
           path: "./documentation"

@@ -33,10 +33,6 @@ from pyMBE.lib import analysis
 pmb = pyMBE.pymbe_library(seed=42)
 
 # Load some functions from the handy_scripts library for convenience
-from pyMBE.lib.handy_functions import setup_electrostatic_interactions
-from pyMBE.lib.handy_functions import relax_espresso_system
-from pyMBE.lib.handy_functions import setup_langevin_dynamics
-from pyMBE.lib.handy_functions import do_reaction
 
 #######################################################
 # Setting parameters for the simulation
@@ -142,7 +138,8 @@ pmb.define_particle(name=chloride_name,
                     epsilon=1*pmb.units('reduced_energy'))
 
 diamond_lattice = DiamondLattice(args.mpc, bond_length)
-espresso_system = espressomd.System(box_l = [diamond_lattice.box_l]*3)
+box_l=[diamond_lattice.box_l]*3
+espresso_system = espressomd.System(box_l = box_l)
 lattice_builder = pmb.initialize_lattice_builder(diamond_lattice)
 
 # Setting up node topology
@@ -163,12 +160,14 @@ for node_conectivity in diamond_lattice.connectivity:
                            'molecule_name':molecule_name})
 
 pmb.define_hydrogel("my_hydrogel", node_topology, chain_topology)
-hydrogel_info = pmb.create_hydrogel("my_hydrogel", espresso_system)
+hydrogel_info = pmb.create_hydrogel("my_hydrogel", box_l=box_l)
 
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system, 
+c_salt_calculated = pmb.create_added_salt(box_l=box_l, 
                                           cation_name=sodium_name, 
                                           anion_name=chloride_name, 
                                           c_salt=c_salt_res)
+pmb.set_simulation_engine(espresso_system)
+pmb.add_instances_to_engine()
 
 print(f"Salt concentration {c_salt_calculated.to('mol/L')} added")
 
@@ -176,7 +175,7 @@ print("*** Setting LJ interactions ***")
 
 dt = 0.01  # Timestep 
 espresso_system.time_step = dt
-pmb.setup_lj_interactions(espresso_system=espresso_system)
+pmb.setup_lj_interactions()
 #Save the initial state 
 n_frame = 0
 frames_dir = data_path / "frames"
@@ -186,11 +185,11 @@ with open(frames_dir / f"trajectory{n_frame}.vtf", mode='w+t') as coordinates:
     vtf.writevcf(espresso_system, coordinates)
 
 print("*** Relaxing the system... ***")
-relax_espresso_system(espresso_system=espresso_system,
+pmb.simulation_engine.relax_espresso_system(
                       seed=seed,
                       Nsteps_iter_relax=100)
 
-setup_langevin_dynamics(espresso_system=espresso_system,
+pmb.simulation_engine.setup_langevin_dynamics(
                         kT = pmb.kT,
                         seed = seed,
                         time_step=dt,
@@ -210,7 +209,7 @@ for j in tqdm.trange(steps_needed):
 # Just to make sure that the system has the target size
 espresso_system.change_volume_and_rescale_particles(
     d_new=L_target, dir="xyz")
-relax_espresso_system(espresso_system=espresso_system,
+pmb.simulation_engine.relax_espresso_system(
                       seed=seed,
                       Nsteps_iter_relax=100,
                       max_displacement=0.01)
@@ -247,10 +246,9 @@ grxmc.set_non_interacting_type (type=non_interacting_type)
 
 for i in tqdm.trange(100):
     espresso_system.integrator.run(steps=1000)
-    do_reaction(grxmc,1000)
+    pmb.simulation_engine.do_reaction(grxmc,1000)
 
-setup_electrostatic_interactions(units=pmb.units,
-                                 espresso_system=espresso_system,
+pmb.simulation_engine.setup_electrostatic_interactions(units=pmb.units,
                                  kT=pmb.kT,
                                  solvent_permittivity=solvent_permittivity)
 
@@ -262,7 +260,7 @@ else:
 print("*** Running warmup with electrostatics... ***")
 for i in tqdm.trange(N_warmup_loops):
     espresso_system.integrator.run(steps=1000)
-    do_reaction(grxmc,100)
+    pmb.simulation_engine.do_reaction(grxmc,100)
 
 # Main loop
 print("*** Starting production run... ***")
@@ -282,7 +280,7 @@ else:
 
 for i in tqdm.trange(N_production_loops):
     espresso_system.integrator.run(steps=1000)
-    do_reaction(grxmc,200)
+    pmb.simulation_engine.do_reaction(grxmc,200)
 
     # Measure time
     time_series["time"].append(espresso_system.time)

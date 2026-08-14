@@ -36,7 +36,8 @@ import espressomd
 # ----------------------------------------------------------------------
 # Set up the ESPResSo system and pyMBE
 # ----------------------------------------------------------------------
-espresso_system = espressomd.System(box_l=[20] * 3)
+box_l=[20] * 3
+espresso_system = espressomd.System(box_l=box_l)
 pmb = pyMBE.pymbe_library(seed=42)
 
 # ----------------------------------------------------------------------
@@ -102,7 +103,7 @@ pmb.define_residue(name="Res_1",
                    side_chains=["A", "B", "C"])
 
 residue_id = pmb.create_residue(name="Res_1",
-                                espresso_system=espresso_system,
+                                box_l=box_l,
                                 use_default_bond=True,
                                 gen_angle=True)
 
@@ -113,8 +114,7 @@ show_database("Demo 1: single residue with gen_angle=True")
 # both ESPResSo and the pyMBE database before running Demo 2.
 # ----------------------------------------------------------------------
 pmb.delete_instances_in_system(instance_id=residue_id,
-                               pmb_type="residue",
-                               espresso_system=espresso_system)
+                               pmb_type="residue")
 
 
 # ======================================================================
@@ -146,7 +146,7 @@ pmb.define_residue(name="NestedRes_3",
                    side_chains=["D", "SubRes_3"])
 
 nested_residue_id = pmb.create_residue(name="NestedRes_3",
-                                       espresso_system=espresso_system,
+                                       box_l=box_l,
                                        use_default_bond=True,
                                        gen_angle=True)
 
@@ -188,7 +188,7 @@ pmb.define_molecule(name="Mol_1",
 
 molecule_ids = pmb.create_molecule(name="Mol_1",
                                    number_of_molecules=1,
-                                   espresso_system=espresso_system,
+                                   box_l=box_l,
                                    backbone_vector=[1.0, 0.0, 0.0],
                                    use_default_bond=True,
                                    gen_angle=True)
@@ -196,6 +196,6 @@ molecule_ids = pmb.create_molecule(name="Mol_1",
 show_database("Demo 3: linear molecule with gen_angle=True")
 
 pmb.delete_instances_in_system(instance_id=molecule_ids[0],
-                               pmb_type="molecule",
-                               espresso_system=espresso_system)
+                               pmb_type="molecule"
+                               )
 

@@ -24,8 +24,10 @@ import unittest as ut
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
 import espressomd
-espresso_system=espressomd.System(box_l = [50]*3)
+box_l=[50]*3
+espresso_system=espressomd.System(box_l = box_l)
 
+pmb.set_simulation_engine(espresso_system,box_l)
 
 
 class Test(ut.TestCase):
@@ -124,7 +126,7 @@ class Test(ut.TestCase):
         pmb.define_particle(**B_input_parameters)
         pmb.define_particle(**C_input_parameters)
         # Setup LJ interactions shift="auto"
-        pmb.setup_lj_interactions(espresso_system=espresso_system)
+        pmb.setup_lj_interactions()
         # Check A-A LJ setup
         lj_templates = pmb.db.get_templates(pmb_type="lj")
         # Check B-B, B-BH, BH-BH setup
@@ -144,10 +146,10 @@ class Test(ut.TestCase):
         # Clean LJ interactions
         pmb.db.delete_templates(pmb_type="lj")
         # ValueError if combining-rule other than Lorentz_-Berthelot is used
-        input_params = {"espresso_system":espresso_system, "combining_rule": "Geometric"}
+        input_params = { "combining_rule": "Geometric"}
         self.assertRaises(ValueError, pmb.setup_lj_interactions, **input_params)
         # Check initialization with shift=0
-        pmb.setup_lj_interactions(espresso_system=espresso_system, shift_potential=False)
+        pmb.setup_lj_interactions( shift_potential=False)
         # Calculate the reference parameters using Lorentz-Berthelot combining rule
         # Check A-BH, A-B, setup
         labels=["A-BH", "A-B"]

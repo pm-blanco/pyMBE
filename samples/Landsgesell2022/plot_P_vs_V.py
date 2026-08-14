@@ -39,8 +39,7 @@ pmb = pyMBE.pymbe_library(seed=42)
 unit_length=0.355*pmb.units.nm
 temperature=300*pmb.units.K
 pmb.set_reduced_units(unit_length=unit_length,
-                      temperature=temperature,
-                      verbose=False)
+                      temperature=temperature)
 ref_cs = pmb.units.Quantity(0.00134770889, "1/reduced_length**3")
 ref_pH = 5
 ref_max_L = 89.235257606948  # Maximum chain length for mpc=39

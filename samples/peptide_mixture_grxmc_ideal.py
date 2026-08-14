@@ -24,7 +24,7 @@ import argparse
 from espressomd.io.writer import vtf
 import pyMBE
 from pyMBE.lib.analysis import built_output_name
-from pyMBE.lib.handy_functions import do_reaction, define_peptide_AA_residues
+from pyMBE.lib.handy_functions import define_peptide_AA_residues
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -189,29 +189,30 @@ L = volume ** (1./3.) # Side of the simulation box
 calculated_peptide_concentration = N_peptide1_chains/(volume*pmb.N_A)
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
+box_l=[L.to('reduced_length').magnitude]*3
+espresso_system=espressomd.System (box_l = box_l)
 
 # Create your molecules into the espresso system
 pmb.create_molecule(name=peptide1, 
                     number_of_molecules=N_peptide1_chains,
-                    espresso_system=espresso_system, 
+                    box_l=box_l,
                     use_default_bond=True)
 pmb.create_molecule(name=peptide2, 
                     number_of_molecules=N_peptide2_chains,
-                    espresso_system=espresso_system, 
+                    box_l=box_l,
                     use_default_bond=True)
 
 if args.mode == 'standard':
     pmb.create_counterions(object_name=peptide1,
                            cation_name=proton_name,
                            anion_name=hydroxide_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 1
+                           box_l=box_l,) # Create counterions for the peptide chains with sequence 1
     pmb.create_counterions(object_name=peptide2,
                            cation_name=proton_name,
                            anion_name=hydroxide_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 2
+                           box_l=box_l,) # Create counterions for the peptide chains with sequence 2
 
-    c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
+    c_salt_calculated = pmb.create_added_salt(box_l=box_l,
                                               cation_name=sodium_name,
                                               anion_name=chloride_name,
                                               c_salt=c_salt)
@@ -219,13 +220,13 @@ elif args.mode == 'unified':
     pmb.create_counterions(object_name=peptide1, 
                            cation_name=cation_name,
                            anion_name=anion_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 1
+                           box_l=box_l,) # Create counterions for the peptide chains with sequence 1
     pmb.create_counterions(object_name=peptide2, 
                            cation_name=cation_name,
                            anion_name=anion_name,
-                           espresso_system=espresso_system) # Create counterions for the peptide chains with sequence 2
+                           box_l=box_l,) # Create counterions for the peptide chains with sequence 2
 
-    c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
+    c_salt_calculated = pmb.create_added_salt(box_l=box_l,
                                               cation_name=cation_name,
                                               anion_name=anion_name,
                                               c_salt=c_salt)
@@ -245,6 +246,9 @@ total_ionisable_groups = len(acid_base_ids)
 # Get peptide net charge
 if verbose:
     print("The box length of your system is", L.to('reduced_length'), L.to('nm'))
+
+pmb.set_simulation_engine(espresso_system)
+pmb.add_instances_to_engine()
 
 if args.mode == 'standard':
     grxmc, ionic_strength_res = pmb.setup_grxmc_reactions(pH_res=pH_value, 
@@ -298,14 +302,14 @@ for label in ["time","charge_peptide1","charge_peptide2","num_plus","xi_plus"]:
 N_frame=0
 for step in range(N_samples):
     espresso_system.integrator.run(steps=MD_steps_per_sample)        
-    do_reaction(grxmc, steps=total_ionisable_groups)
+    pmb.simulation_engine.do_reaction(grxmc, steps=total_ionisable_groups)
     time_series["time"].append(espresso_system.time)
     # Get net charge of peptide1 and peptide2
-    charge_dict_peptide1=pmb.calculate_net_charge(espresso_system=espresso_system, 
+    charge_dict_peptide1=pmb.calculate_net_charge(
                                                 object_name=peptide1,
                                                 pmb_type="peptide",
                                                 dimensionless=True)
-    charge_dict_peptide2=pmb.calculate_net_charge(espresso_system=espresso_system, 
+    charge_dict_peptide2=pmb.calculate_net_charge(
                                                 object_name=peptide2,
                                                 pmb_type="peptide",
                                                 dimensionless=True)

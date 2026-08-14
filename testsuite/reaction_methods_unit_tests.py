@@ -23,12 +23,11 @@ import espressomd
 import unittest as ut
 
 
-
-
 def reaction_method_test_template(parameters):
 
     # Create an instance of the pyMBE library
     pmb = pyMBE.pymbe_library(seed=42)
+    pmb.set_simulation_engine(espresso_system)
 
     if parameters["method"] in ["cpH", "grxmc", "grxmc_unified"]:
         # Define the acidic particle
@@ -378,6 +377,7 @@ class Test(ut.TestCase):
                             "salt_anion_name": "Cl", 
                             "activity_coefficient": lambda x: 1.0}
 
+        pmb.set_simulation_engine(espresso_system)
         # Add the reactions using pyMBE
         pmb.setup_gcmc(**input_parameters)
         pmb.setup_cpH(counter_ion="Na", 

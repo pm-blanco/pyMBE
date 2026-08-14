@@ -17,10 +17,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from typing import Literal, Optional
+from typing import Literal, Optional,List
+from numpy.typing import NDArray
 from pydantic import validator
 from ..base_type import PMBBaseModel
-
 
 class ParticleInstance(PMBBaseModel):
     """
@@ -56,10 +56,18 @@ class ParticleInstance(PMBBaseModel):
     name: str 
     particle_id: int
     initial_state: str
+    position: NDArray
+    fix: List[bool]=[False,False,False]
     residue_id: Optional[int] = None
     molecule_id: Optional[int] = None
     assembly_id: Optional[int] = None
-
+    added_to_engine: bool = False
+    
+    class Config:
+        arbitrary_types_allowed=True
+        validate_assignment = True
+        extra = "forbid"
+        
     @validator("particle_id")
     def validate_particle_id(cls, pid):
         if pid < 0:

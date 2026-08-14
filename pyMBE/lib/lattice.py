@@ -333,5 +333,5 @@ class DiamondLattice:
             raise ValueError("mpc must be a non-zero positive integer.")
         self.mpc = mpc
         self.bond_l = bond_l
-        self.box_l = (self.mpc+2)*self.bond_l.magnitude / (np.sqrt(3)*0.25)
+        self.box_l = (self.mpc+1)*self.bond_l.magnitude / (np.sqrt(3)*0.25)
 

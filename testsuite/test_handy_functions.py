@@ -22,7 +22,6 @@ import unittest as ut
 import espressomd
 import espressomd.version
 import pyMBE
-import pyMBE.lib.handy_functions as hf
 import logging
 import io
 import re
@@ -34,12 +33,14 @@ logging.basicConfig(level=logging.INFO,
                     handlers=[logging.StreamHandler(log_stream)] )
 
 # Create instances of espresso and pyMBE
-espresso_system = espressomd.System(box_l=[60,60,60])
+box_l=[60,60,60]
+espresso_system = espressomd.System(box_l=box_l)
 seed = 23
 pmb = pyMBE.pymbe_library(seed=seed)
+pmb.set_simulation_engine(espresso_system)
 kT = pmb.kT
 
-langevin_inputs={"espresso_system":espresso_system, 
+langevin_inputs={
                 "kT" : kT, 
                 "seed" : seed,
                 "time_step" : 1e-2, 
@@ -51,7 +52,7 @@ langevin_inputs={"espresso_system":espresso_system,
                 "int_steps": 200,
                 "adjust_max_skin": True}
 
-relax_inputs={"espresso_system":espresso_system, 
+relax_inputs={
               "gamma":0.01,
               "Nsteps_steepest_descent":5000, 
               "max_displacement":0.1, 
@@ -59,7 +60,6 @@ relax_inputs={"espresso_system":espresso_system,
               "seed": seed}
 
 electrostatics_inputs={"units": pmb.units, 
-                       "espresso_system": espresso_system, 
                        "kT": pmb.kT, 
                        "c_salt": None, 
                        "solvent_permittivity":78.5, 
@@ -68,6 +68,7 @@ electrostatics_inputs={"units": pmb.units,
                        "accuracy":1e-3,
                        "verbose":False}
 
+#### To import handy_functions is no longer needed as the methods employed in this tests now they belong to the simulation_engine
 
 class Test(ut.TestCase):
 
@@ -83,21 +84,21 @@ class Test(ut.TestCase):
         """Test exceptions in :func:`lib.handy_functions.setup_langevin_dynamics`"""
         broken_inputs  = langevin_inputs.copy()
         broken_inputs["seed"] = "pyMBE"
-        self.assertRaises(TypeError, hf.setup_langevin_dynamics, **broken_inputs)
+        self.assertRaises(TypeError, pmb.simulation_engine.setup_langevin_dynamics, **broken_inputs)
         broken_inputs  = langevin_inputs.copy()
         broken_inputs["time_step"] = -1
-        self.assertRaises(ValueError, hf.setup_langevin_dynamics, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.setup_langevin_dynamics, **broken_inputs)
         broken_inputs  = langevin_inputs.copy()
         broken_inputs["gamma"] = -1
-        self.assertRaises(ValueError, hf.setup_langevin_dynamics, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.setup_langevin_dynamics, **broken_inputs)
         broken_inputs  = langevin_inputs.copy()
         broken_inputs["min_skin"] = 10
         broken_inputs["max_skin"] = 1
-        self.assertRaises(ValueError, hf.setup_langevin_dynamics, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.setup_langevin_dynamics, **broken_inputs)
 
     def test_langevin_setup(self):
         """Test :func:`lib.handy_functions.setup_langevin_dynamics`"""
-        hf.setup_langevin_dynamics(**langevin_inputs)
+        pmb.simulation_engine.setup_langevin_dynamics(**langevin_inputs)
         ## Test setup of the integrator
         self.assertEqual(first=langevin_inputs["time_step"],
                          second=espresso_system.time_step,
@@ -130,7 +131,7 @@ class Test(ut.TestCase):
             epsilon = 1, sigma = 1, cutoff = 3, shift = "auto")
         langevin_inputs_opt_skin  = langevin_inputs.copy() 
         langevin_inputs_opt_skin["tune_skin"] = True
-        hf.setup_langevin_dynamics(**langevin_inputs_opt_skin)
+        pmb.simulation_engine.setup_langevin_dynamics(**langevin_inputs_opt_skin)
         log_contents = log_stream.getvalue()
         optimized_skin = float(re.search(r"Optimized skin value: ([\d.]+)", log_contents).group(1))
         self.assertEqual(first=optimized_skin,
@@ -141,16 +142,16 @@ class Test(ut.TestCase):
         """Test exceptions in :func:`lib.handy_functions.relax_espresso_system`"""
         broken_inputs  = relax_inputs.copy()
         broken_inputs["gamma"] = -1
-        self.assertRaises(ValueError, hf.relax_espresso_system, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.relax_espresso_system, **broken_inputs)
         broken_inputs  = relax_inputs.copy()
         broken_inputs["Nsteps_steepest_descent"] = -1
-        self.assertRaises(ValueError, hf.relax_espresso_system, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.relax_espresso_system, **broken_inputs)
         broken_inputs  = relax_inputs.copy()
         broken_inputs["Nsteps_iter_relax"] = -1
-        self.assertRaises(ValueError, hf.relax_espresso_system, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.relax_espresso_system, **broken_inputs)
         broken_inputs  = relax_inputs.copy()
         broken_inputs["max_displacement"] = -1
-        self.assertRaises(ValueError, hf.relax_espresso_system, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.relax_espresso_system, **broken_inputs)
         broken_inputs  = relax_inputs.copy()
 
     def test_relax_espresso_system(self):
@@ -165,7 +166,7 @@ class Test(ut.TestCase):
             espresso_system.part.add(pos=pos)
         espresso_system.non_bonded_inter[0,0].lennard_jones.set_params(
             epsilon = 1, sigma = 1, cutoff = 2**(1./6.), shift = "auto")
-        min_dist = hf.relax_espresso_system(**relax_inputs)
+        min_dist = pmb.simulation_engine.relax_espresso_system(**relax_inputs)
         self.assertGreater(a=min_dist,
                            b=0.9,
                            msg="lib.handy_functions.relax_espresso_system is unable to relax a simple lj system")
@@ -176,7 +177,7 @@ class Test(ut.TestCase):
         test_inputs  = relax_inputs.copy()
         test_inputs["Nsteps_steepest_descent"] = 1
         test_inputs["max_displacement"] = 0
-        hf.relax_espresso_system(**relax_inputs)
+        pmb.simulation_engine.relax_espresso_system(**relax_inputs)
         new_positions = espresso_system.part.all().pos
         distances = np.linalg.norm(np.array(positions) - new_positions, 
                                    axis=1)
@@ -190,16 +191,16 @@ class Test(ut.TestCase):
         """Test exceptions in :func:`lib.handy_functions.setup_electrostatic_interactions`"""
         broken_inputs  = electrostatics_inputs.copy()
         broken_inputs["units"] = "pyMBE"
-        self.assertRaises(TypeError, hf.setup_electrostatic_interactions, **broken_inputs)
+        self.assertRaises(TypeError, pmb.simulation_engine.setup_electrostatic_interactions, **broken_inputs)
         broken_inputs  = electrostatics_inputs.copy()
         broken_inputs["method"] = "dH"
-        self.assertRaises(ValueError, hf.setup_electrostatic_interactions, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.setup_electrostatic_interactions, **broken_inputs)
         broken_inputs  = electrostatics_inputs.copy()
         broken_inputs["method"] = "dh"
-        self.assertRaises(ValueError, hf.setup_electrostatic_interactions, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.setup_electrostatic_interactions, **broken_inputs)
         broken_inputs  = electrostatics_inputs.copy()
         broken_inputs["c_salt"] = 10*pmb.units.nm
-        self.assertRaises(ValueError, hf.setup_electrostatic_interactions, **broken_inputs)
+        self.assertRaises(ValueError, pmb.simulation_engine.setup_electrostatic_interactions, **broken_inputs)
 
     def test_setup_electrostatics(self):
         """Test :func:`lib.handy_functions.setup_electrostatic_interactions`"""
@@ -208,7 +209,7 @@ class Test(ut.TestCase):
         Bjerrum_length = pmb.e.to('reduced_charge')**2 / (4 * pmb.units.pi * pmb.units.eps0 * electrostatics_inputs["solvent_permittivity"] * electrostatics_inputs["kT"].to('reduced_energy'))
         coulomb_prefactor=Bjerrum_length*electrostatics_inputs["kT"]
         # Test the P3M setup
-        hf.setup_electrostatic_interactions(**electrostatics_inputs)
+        pmb.simulation_engine.setup_electrostatic_interactions(**electrostatics_inputs)
         if espressomd.version.friendly() == "4.2":
             coulomb = espresso_system.actors.active_actors.copy()[0]
         else:
@@ -236,7 +237,7 @@ class Test(ut.TestCase):
                                            "cao": 5, 
                                            "alpha": 1.1265e+01,
                                            "r_cut": 1}
-        hf.setup_electrostatic_interactions(**electrostatics_inputs)
+        pmb.simulation_engine.setup_electrostatic_interactions(**electrostatics_inputs)
         if espressomd.version.friendly() == "4.2":
             coulomb = espresso_system.actors.active_actors.copy()[0]
         else:
@@ -256,7 +257,7 @@ class Test(ut.TestCase):
         electrostatics_inputs["method"] = "dh"
         electrostatics_inputs["c_salt"] = pmb.units.Quantity(1, "mol/L")
         kappa=1./np.sqrt(8*pmb.units.pi*Bjerrum_length*pmb.N_A*electrostatics_inputs["c_salt"])
-        hf.setup_electrostatic_interactions(**electrostatics_inputs)
+        pmb.simulation_engine.setup_electrostatic_interactions(**electrostatics_inputs)
         if espressomd.version.friendly() == "4.2":
             dh = espresso_system.actors.active_actors.copy()[0]
         else:
@@ -279,7 +280,7 @@ class Test(ut.TestCase):
         else:
             coulomb = espresso_system.electrostatics.solver = None
         electrostatics_inputs["c_salt"] = pmb.units.Quantity(1, "mol/L")*pmb.N_A
-        hf.setup_electrostatic_interactions(**electrostatics_inputs)
+        pmb.simulation_engine.setup_electrostatic_interactions(**electrostatics_inputs)
         if espressomd.version.friendly() == "4.2":
             dh = espresso_system.actors.active_actors.copy()[0]
         else:
@@ -297,7 +298,7 @@ class Test(ut.TestCase):
             coulomb = espresso_system.electrostatics.solver = None
         # Test a non-default cut-off
         electrostatics_inputs["params"] = {"r_cut": 3}
-        hf.setup_electrostatic_interactions(**electrostatics_inputs)
+        pmb.simulation_engine.setup_electrostatic_interactions(**electrostatics_inputs)
         if espressomd.version.friendly() == "4.2":
             dh = espresso_system.actors.active_actors.copy()[0]
         else:

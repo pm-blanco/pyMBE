@@ -22,8 +22,8 @@ import unittest as ut
 import pyMBE
 from pyMBE.lib.lattice import DiamondLattice
 import espressomd
-
-espresso_system = espressomd.System(box_l=[10] * 3)
+box_l=[10] * 3
+espresso_system = espressomd.System(box_l=box_l)
 
 
 def build_simple_hydrogel_with_optional_angles(junction_angle_mode="none", mpc_local=4):
@@ -176,10 +176,10 @@ class Test(ut.TestCase):
         """
         Hydrogel creation should not generate angles unless gen_angle is requested.
         """
-        pmb_local, espresso_system_local, hydrogel_name_local, _ = build_simple_hydrogel_with_optional_angles(
+        pmb_local, _, hydrogel_name_local, _ = build_simple_hydrogel_with_optional_angles(
             junction_angle_mode="full"
         )
-        pmb_local.create_hydrogel(hydrogel_name_local, espresso_system_local)
+        pmb_local.create_hydrogel(hydrogel_name_local, box_l)
         self.assertEqual(len(pmb_local.db.get_instances(pmb_type="angle")), 0)
 
     def test_hydrogel_chain_angles_are_created_without_crosslinker_templates(self):
@@ -191,9 +191,11 @@ class Test(ut.TestCase):
             junction_angle_mode="none"
         )
         with self.assertLogs(level="WARNING") as log_context:
-            pmb_local.create_hydrogel(hydrogel_name_local, espresso_system_local, gen_angle=True)
+            pmb_local.create_hydrogel(hydrogel_name_local, box_l, gen_angle=True)
 
         angle_counts = get_angle_counts(pmb_local)
+        pmb_local.set_simulation_engine(espresso_system_local)
+        pmb_local.add_instances_to_engine()
         self.assertEqual(
             angle_counts,
             {"C-C-C": len(diamond_lattice_local.connectivity) * (diamond_lattice_local.mpc - 2)},
@@ -210,7 +212,9 @@ class Test(ut.TestCase):
         pmb_local, espresso_system_local, hydrogel_name_local, diamond_lattice_local = build_simple_hydrogel_with_optional_angles(
             junction_angle_mode="full"
         )
-        pmb_local.create_hydrogel(hydrogel_name_local, espresso_system_local, gen_angle=True)
+        pmb_local.create_hydrogel(hydrogel_name_local, box_l, gen_angle=True)
+        pmb_local.set_simulation_engine(espresso_system_local)
+        pmb_local.add_instances_to_engine()
         self.assertEqual(get_angle_counts(pmb_local),
                          expected_crosslinker_angle_counts(diamond_lattice_local))
 
@@ -218,11 +222,11 @@ class Test(ut.TestCase):
         """
         Defining only a subset of required crosslinker-adjacent angles should fail.
         """
-        pmb_local, espresso_system_local, hydrogel_name_local, _ = build_simple_hydrogel_with_optional_angles(
+        pmb_local, _, hydrogel_name_local, _ = build_simple_hydrogel_with_optional_angles(
             junction_angle_mode="partial"
         )
         with self.assertRaises(ValueError):
-            pmb_local.create_hydrogel(hydrogel_name_local, espresso_system_local, gen_angle=True)
+            pmb_local.create_hydrogel(hydrogel_name_local, box_l, gen_angle=True)
 
 
 if __name__ == "__main__":

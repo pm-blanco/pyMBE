@@ -18,6 +18,8 @@
 #
 
 import pandas as pd
+import numpy as np
+
 from collections import defaultdict
 from typing import Dict, Any
 from pyMBE.storage.templates.particle import ParticleTemplate
@@ -281,6 +283,8 @@ class Manager:
                 rows.append({"pmb_type": pmb_type,
                             "name": inst.name,
                             "particle_id": inst.particle_id,
+                            "position":inst.position,
+                            "fix":inst.fix,
                             "initial_state": inst.initial_state,
                             "residue_id": int(inst.residue_id) if inst.residue_id is not None else pd.NA,
                             "molecule_id": int(inst.molecule_id) if inst.molecule_id is not None else pd.NA,
@@ -300,7 +304,27 @@ class Manager:
                 # Generic representation for other types
                 rows.append(inst.dict())
         return pd.DataFrame(rows)
+    
+    def _get_label_id_map(self, pmb_type):
+        """
+        Returns the key used to access the particle ID map for a given pyMBE object type.
 
+        Args:
+            pmb_type ('str'):
+                pyMBE object type for which the particle ID map label is requested.
+
+        Returns:
+            'str':
+                Label identifying the appropriate particle ID map. 
+        """
+        if pmb_type in self._assembly_like_types:
+            label="assembly_map"
+        elif pmb_type in self._molecule_like_types:
+            label="molecule_map"
+        else:
+            label=f"{pmb_type}_map"
+        return label
+    
     def _get_reactions_df(self):
         """
         Returns a DataFrame summarizing all registered chemical reactions.
@@ -541,11 +565,15 @@ class Manager:
         if instance_id not in self._instances[pmb_type]:
             raise ValueError(f"Instance '{instance_id}' not found for type '{pmb_type}' in the pyMBE database.")                                
         if pmb_type == "particle":
-            allowed = ["initial_state", "residue_id", "molecule_id", "assembly_id"]
+            allowed = ["initial_state", "residue_id", "molecule_id", "assembly_id","particle_id","position","added_to_engine"]
         elif pmb_type == "residue":
             allowed = ["molecule_id", "assembly_id"]
         elif pmb_type in self._molecule_like_types:
             allowed = ["assembly_id"]
+        elif pmb_type =="bond":
+            allowed = ["particle_id1","particle_id2","added_to_engine"]
+        elif pmb_type =="angle":
+            allowed = ["particle_id1","particle_id2","particle_id3","added_to_engine"]
         else:
             allowed = [None]  # No attributes allowed for other types        
         if attribute not in allowed:
@@ -887,7 +915,78 @@ class Manager:
                 Returns an empty dict if no instances exist for the given type.
         """
         return self._instances.get(pmb_type, {}).copy()
+    
+    def get_lj_parameters(self, particle_name1, particle_name2, combining_rule='Lorentz-Berthelot'):
+        """
+        Returns the Lennard-Jones parameters for the interaction between the particle types given by 
+        'particle_name1' and 'particle_name2' in the pyMBE database, calculated according to the provided combining rule.
 
+        Args:
+            particle_name1 ('str'): 
+                label of the type of the first particle type
+
+            particle_name2 ('str'): 
+                label of the type of the second particle type
+
+            combining_rule ('string', optional): 
+                combining rule used to calculate 'sigma' and 'epsilon' for the potential betwen a pair of particles. Defaults to 'Lorentz-Berthelot'.
+
+        Returns:
+            ('dict'):
+                {"epsilon": epsilon_value, "sigma": sigma_value, "offset": offset_value, "cutoff": cutoff_value}
+
+        Notes:
+            - Currently, the only 'combining_rule' supported is Lorentz-Berthelot.
+            - If the sigma value of 'particle_name1' or 'particle_name2' is 0, the function will return an empty dictionary. No LJ interactions are set up for particles with sigma = 0.
+        """
+        supported_combining_rules=["Lorentz-Berthelot"]
+        if combining_rule not in supported_combining_rules:
+            raise ValueError(f"Combining_rule {combining_rule} currently not implemented in pyMBE, valid keys are {supported_combining_rules}")
+        part_tpl1 = self.get_template(name=particle_name1,
+                                         pmb_type="particle")
+        part_tpl2 = self.get_template(name=particle_name2,
+                                         pmb_type="particle")
+        lj_parameters1 = part_tpl1.get_lj_parameters(ureg=self._units)
+        lj_parameters2 = part_tpl2.get_lj_parameters(ureg=self._units)
+
+        # If one of the particle has sigma=0, no LJ interations are set up between that particle type and the others    
+        if part_tpl1.sigma.magnitude == 0 or part_tpl2.sigma.magnitude == 0:
+            return {}
+        # Apply combining rule
+        if combining_rule == 'Lorentz-Berthelot':
+            sigma=(lj_parameters1["sigma"]+lj_parameters2["sigma"])/2
+            cutoff=(lj_parameters1["cutoff"]+lj_parameters2["cutoff"])/2
+            offset=(lj_parameters1["offset"]+lj_parameters2["offset"])/2
+            epsilon=np.sqrt(lj_parameters1["epsilon"]*lj_parameters2["epsilon"])
+        return {"sigma": sigma, "cutoff": cutoff, "offset": offset, "epsilon": epsilon}
+        
+    def get_radius_map(self, dimensionless=True):
+        """
+        Gets the effective radius of each particle defined in the pyMBE database. 
+
+        Args:
+            dimensionless ('bool'):
+                If ``True``, return magnitudes expressed in ``reduced_length``.
+                If ``False``, return Pint quantities with units.
+        
+        Returns:
+            ('dict'): 
+                {espresso_type: radius}.
+
+        Notes:
+            - The radius corresponds to (sigma+offset)/2
+        """
+        if "particle" not in self._templates:
+            return {}          
+        result = {}
+        for _, tpl in self._templates["particle"].items():
+            radius = (tpl.sigma.to_quantity(self._units) + tpl.offset.to_quantity(self._units))/2.0
+            if dimensionless:
+                magnitude_reduced_length = radius.m_as("reduced_length")
+                radius = magnitude_reduced_length
+            for state in self.get_particle_states_templates(particle_name=tpl.name).values():
+                result[state.es_type] = radius
+        return result
     def get_reaction(self,  name):
         """
         Retrieve a reaction stored in the pyMBE database by  name.
@@ -1112,3 +1211,22 @@ class Manager:
         particle_states = {state.name: state for state in states.values()
                            if state.particle_name == particle_name}
         return particle_states
+    def propose_unused_type(self):
+        """
+        Propose an unused ESPResSo particle type.
+
+        Returns:
+            ('int'): 
+                The next available integer ESPResSo type. Returns ''0'' if no integer types are currently defined.
+        """
+        type_map = self.get_es_types_map()
+        # Flatten all es_type values across all particles and states
+        all_types = []
+        for es_type in type_map.values():
+            all_types.append(es_type)
+        # If no es_types exist, start at 0
+        if not all_types:
+            return 0
+        return max(all_types) + 1
+    
+    

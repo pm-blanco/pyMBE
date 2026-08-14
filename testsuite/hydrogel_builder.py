@@ -73,16 +73,16 @@ pmb.define_bond(bond_type = 'harmonic',
                                                                         [NodeType, BeadType2]])
 
 diamond_lattice = DiamondLattice(mpc, generic_bond_length)
-box_l = diamond_lattice.box_l
-espresso_system = espressomd.System(box_l = [box_l]*3)
+box_l = [diamond_lattice.box_l]*3
+espresso_system = espressomd.System(box_l = box_l)
 lattice_builder = pmb.initialize_lattice_builder(diamond_lattice)
 
 
 pmb.create_molecule(name=molecule_name,
                     number_of_molecules=1,
-                    espresso_system=espresso_system,
+                    box_l=box_l,
                     use_default_bond=False,
-                    list_of_first_residue_positions = [[np.random.uniform(0,box_l)]*3])
+                    list_of_first_residue_positions = [[np.random.uniform(0,diamond_lattice.box_l)]*3])
 
 # Setting up node topology
 indices = diamond_lattice.indices
@@ -106,18 +106,22 @@ hydrogel_name="my_hydrogel"
 pmb.define_hydrogel(hydrogel_name,node_topology, chain_topology)
 
 # Creating hydrogel
-hydrogel_id= pmb.create_hydrogel(hydrogel_name, espresso_system)
+hydrogel_id= pmb.create_hydrogel(hydrogel_name,box_l=box_l)
 hydrogel_tpl = pmb.db.get_template(pmb_type="hydrogel", 
                                    name=hydrogel_name)
 hydrogel_inst = pmb.db.get_instance(pmb_type="hydrogel", 
                                     instance_id=hydrogel_id)
+
+pmb.set_simulation_engine(espresso_system)
+pmb.add_instances_to_engine()
+
 class Test(ut.TestCase):
     def test_create_hydrogel_missing_template(self):
         """
         Unit test that create_hydrogel raises if the template is missing.
         """
         with self.assertRaises(ValueError):
-            pmb.create_hydrogel("missing_hydrogel_template", espresso_system)
+            pmb.create_hydrogel("missing_hydrogel_template",box_l=box_l)
 
     def test_hydrogel_template_storage(self):
         """
@@ -199,14 +203,14 @@ class Test(ut.TestCase):
         molecule_ids = pmb.db._find_instance_ids_by_attribute(pmb_type="molecule",
                                                             attribute="assembly_id",
                                                             value=hydrogel_id)
-        expected = (diamond_lattice.mpc - 1) * generic_bond_length.m_as("reduced_length")
+        expected = (diamond_lattice.mpc -1) * generic_bond_length.m_as('reduced_length')       
         for mol_id in molecule_ids:
             particle_ids = pmb.db._find_instance_ids_by_attribute(pmb_type="particle",
                                                                 attribute="molecule_id",
                                                                 value=mol_id)
             positions = np.array([espresso_system.part.by_id(pid).pos for pid in particle_ids])
-            contour = np.sum(np.linalg.norm(np.diff(positions, axis=0), axis=1))
-            np.testing.assert_allclose(contour, expected, atol=1e-7)
+            contour = np.sum(np.linalg.norm(np.diff(positions, axis=0), axis=1))*pmb.units.nm
+            np.testing.assert_allclose(contour.m_as('reduced_length'), expected, atol=1e-7)
     
     def test_exceptions(self):
         """

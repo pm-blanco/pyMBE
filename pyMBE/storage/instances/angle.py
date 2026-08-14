@@ -50,6 +50,7 @@ class AngleInstance(PMBBaseModel):
     particle_id1: int
     particle_id2: int
     particle_id3: int
+    added_to_engine: bool = False
 
     @validator("angle_id", "particle_id1", "particle_id2", "particle_id3")
     def validate_non_negative_int(cls, value, field):

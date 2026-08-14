@@ -26,11 +26,8 @@ from espressomd.io.writer import vtf
 import pyMBE
 
 # Load some functions from the handy_scripts library for convenience
-from pyMBE.lib.handy_functions import setup_langevin_dynamics
-from pyMBE.lib.handy_functions import relax_espresso_system
-from pyMBE.lib.handy_functions import setup_electrostatic_interactions
-from pyMBE.lib.handy_functions import do_reaction
 from pyMBE.lib.analysis import built_output_name
+
 
 # Create an instance of pyMBE library
 
@@ -143,21 +140,22 @@ L = volume ** (1./3.) # Side of the simulation box
 calculated_polyampholyte_concentration = N_polyampholyte_chains/(volume*pmb.N_A)
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System(box_l = [L.to('reduced_length').magnitude]*3)
+box_l = [L.to('reduced_length').magnitude]*3
+espresso_system=espressomd.System(box_l = box_l)
 espresso_system.time_step=dt
 espresso_system.cell_system.skin=0.4
 
 # Create your molecules into the espresso system
 pmb.create_molecule(name="polyampholyte", 
                     number_of_molecules=N_polyampholyte_chains,
-                    espresso_system=espresso_system, 
+                    box_l=box_l, 
                     use_default_bond=True)
 pmb.create_counterions(object_name="polyampholyte",
                        cation_name=cation_name,
                        anion_name=anion_name,
-                       espresso_system=espresso_system)
+                       box_l=box_l)
 
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
+c_salt_calculated = pmb.create_added_salt(box_l=box_l,
                                           cation_name=cation_name,
                                           anion_name=anion_name,
                                           c_salt=c_salt)
@@ -174,6 +172,8 @@ if verbose:
     print(f"The box length of your system is {L.to('reduced_length')}, {L.to('nm')}")
     print(f"The polyampholyte concentration in your system is {calculated_polyampholyte_concentration.to('mol/L')} with {N_polyampholyte_chains} molecules")
 
+pmb.set_simulation_engine(espresso_system)
+
 cpH = pmb.setup_cpH(counter_ion=cation_name, constant_pH=pH_value)
 if verbose:
     print("The acid-base reaction has been successfully set up for:")
@@ -189,30 +189,32 @@ non_interacting_type = max(type_map.values())+1
 cpH.set_non_interacting_type (type=non_interacting_type)
 if verbose:
     print(f"The non interacting type is set to {non_interacting_type}")
+    
+
+pmb.add_instances_to_engine()
 
 if not ideal:
     ##Setup the potential energy
     if verbose:
         print('Setup LJ interaction (this can take a few seconds)')
-    pmb.setup_lj_interactions (espresso_system=espresso_system)
+    pmb.setup_lj_interactions()
     if verbose:
         print('Minimize energy before adding electrostatics')
-    relax_espresso_system(espresso_system=espresso_system,
+    pmb.simulation_engine.relax_espresso_system(
                           seed=langevin_seed)
 
     if verbose:
         print('Setup and tune electrostatics (this can take a few seconds)')
-    setup_electrostatic_interactions(units=pmb.units,
-                                    espresso_system=espresso_system,
+    pmb.simulation_engine.setup_electrostatic_interactions(units=pmb.units,
                                     kT=pmb.kT)
     if verbose:
         print('Minimize energy after adding electrostatics')
-    relax_espresso_system(espresso_system=espresso_system,
+    pmb.simulation_engine.relax_espresso_system(
                           seed=langevin_seed)
 
 
 #Setup Langevin
-setup_langevin_dynamics(espresso_system=espresso_system, 
+pmb.simulation_engine.setup_langevin_dynamics(
                         kT = pmb.kT, 
                         seed = langevin_seed,
                         time_step=dt,
@@ -231,9 +233,9 @@ for label in ["time","charge"]:
 N_frame=0
 for step in tqdm.trange(N_samples):
     espresso_system.integrator.run(steps=MD_steps_per_sample)        
-    do_reaction(cpH, steps=total_ionisable_groups)   
+    pmb.simulation_engine.do_reaction(cpH, steps=total_ionisable_groups)   
     # Get polyampholyte net charge
-    charge_dict=pmb.calculate_net_charge(espresso_system=espresso_system, 
+    charge_dict=pmb.calculate_net_charge(
                                         object_name="polyampholyte",
                                         pmb_type="molecule",
                                         dimensionless=True)

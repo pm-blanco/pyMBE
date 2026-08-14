@@ -16,7 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Import pyMBE and other libraries
 import pyMBE
 import numpy as np
 import espressomd
@@ -69,7 +68,8 @@ for parameter_set in molecule_parameters.values():
     pmb.define_molecule(**parameter_set)
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System(box_l = [10]*3)
+box_l=[10]*3
+espresso_system=espressomd.System(box_l = box_l)
 particle_positions=[[0,0,0],[1,1,1]]
 
 bond_type = 'harmonic'
@@ -115,10 +115,14 @@ class Test(ut.TestCase):
     
         """
         retval = pmb.create_particle(name="S1",
-                                    espresso_system=espresso_system,
+                                    box_l=box_l,
                                     number_of_particles=2,
-                                    fix=True,
+                                    fix=[True,True,True],
                                     position=particle_positions)
+        
+        pmb.set_simulation_engine(espresso_system)
+        pmb.add_instances_to_engine()
+
         self.assertListEqual(retval, [0, 1])
 
         particle_ids=pmb.get_particle_id_map(object_name="S1")["all"]
@@ -135,17 +139,22 @@ class Test(ut.TestCase):
                                  list2=particle_positions[pid])
         starting_number_of_particles=len(espresso_system.part.all())
 
+        ### Tests that when number of particles is 0 or -1 no particles is created
         for number_of_particles in [0, -1]:
             retval = pmb.create_particle(name="S1",
-                                        espresso_system=espresso_system,
+                                        box_l=box_l,
                                         number_of_particles=number_of_particles)
             self.assertEqual(len(retval), 0)
+
+        
         # If no particles have been created, only two particles should be in the system (from the previous test)
         self.assertEqual(first=len(espresso_system.part.all()), 
                                 second=starting_number_of_particles)
+        
+        ### Returns ValueError as no particle with name S23 has been previously defined.
         with self.assertRaises(ValueError):
             pmb.create_particle(name="S23",
-                                espresso_system=espresso_system,
+                                box_l=box_l,
                                 number_of_particles=1)
             
         # If no particles have been created, only two particles should be in the system (from the previous test)
@@ -157,8 +166,7 @@ class Test(ut.TestCase):
         starting_number_of_rows=len(pmb.get_instances_df(pmb_type="particle"))
         # This should delete one particle instance
         pmb.delete_instances_in_system(instance_id=0,
-                                    pmb_type="particle",
-                                    espresso_system=espresso_system)
+                                    pmb_type="particle")
         self.assertEqual(first=len(espresso_system.part.all()), 
                                 second=starting_number_of_particles-1)
         particle_df = pmb.get_instances_df(pmb_type="particle")
@@ -167,21 +175,21 @@ class Test(ut.TestCase):
 
         # Delete the other particle instance to simplify the rest of the tests
         pmb.delete_instances_in_system(instance_id=1,
-                                    pmb_type="particle",
-                                    espresso_system=espresso_system)
+                                    pmb_type="particle")
         
 
         central_bead_position=[[0,0,0]]
         backbone_vector=np.array([1.,2.,3.])
 
         pmb.create_residue(name="R2",
-                        espresso_system=espresso_system,
+                        box_l=box_l,
                         central_bead_position=central_bead_position,
                         backbone_vector=backbone_vector,
                         use_default_bond=True)
 
         particle_ids=pmb.get_particle_id_map(object_name="R2")["all"]
 
+        pmb.add_instances_to_engine()
         # Check that the particle properties are correct
         for pid in particle_ids:
             particle=espresso_system.part.by_id(pid)
@@ -228,11 +236,11 @@ class Test(ut.TestCase):
                         second=frozenset([frozenset([0,1]),frozenset([0,2])]))
 
         pmb.create_residue(name="R3",
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             use_default_bond=True)
 
         particle_ids=pmb.get_particle_id_map(object_name="R3")["all"]
-
+        pmb.add_instances_to_engine()
         # Check that the particle properties are correct
         for pid in particle_ids:
             particle=espresso_system.part.by_id(pid)
@@ -278,7 +286,7 @@ class Test(ut.TestCase):
         starting_number_of_particles=len(espresso_system.part.all())
         with self.assertRaises(ValueError):
             pmb.create_residue(name="R51",
-                               espresso_system=espresso_system,
+                               box_l=box_l,
                                use_default_bond=True)
         # If no particles have been created, the number of particles should be the same as before
         self.assertEqual(first=len(espresso_system.part.all()), 
@@ -288,8 +296,7 @@ class Test(ut.TestCase):
         # This should delete 3 particles (residue 0 is a R2 residue)
         starting_number_of_particles=len(espresso_system.part.all())
         pmb.delete_instances_in_system(instance_id=0,
-                                    pmb_type="residue",
-                                    espresso_system=espresso_system)
+                                    pmb_type="residue")
         self.assertEqual(first=len(espresso_system.part.all()), 
                          second=starting_number_of_particles-3)
         # There should be only one residue instance now in the pyMBE database
@@ -300,18 +307,17 @@ class Test(ut.TestCase):
                                 second=4)
         # Delete the other residue instance to simplify the rest of the tests
         pmb.delete_instances_in_system(instance_id=1,
-                                    pmb_type="residue",
-                                    espresso_system=espresso_system)
+                                    pmb_type="residue")
         
         backbone_vector = np.array([1,3,-4])
         magnitude = np.linalg.norm(backbone_vector)
         backbone_vector = backbone_vector/magnitude
         pmb.create_molecule(name="M2",
                             number_of_molecules=1,
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             backbone_vector = backbone_vector,
                             use_default_bond=True)
-
+        pmb.add_instances_to_engine()
         particle_ids=pmb.get_particle_id_map(object_name="M2")["all"]
 
         # Residue and molecule IDs expected
@@ -405,12 +411,13 @@ class Test(ut.TestCase):
         starting_number_of_particles=len(espresso_system.part.all())
         pmb.create_molecule(name="M2",
                             number_of_molecules=0,
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             use_default_bond=True)
         pmb.create_molecule(name="M2",
                             number_of_molecules=-1,
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             use_default_bond=True)
+        ### No particle instances are added thus no need to add them to the engine 
         # If no particles have been created, only two particles should be in the system (from the previous test)
         self.assertEqual(first=len(espresso_system.part.all()), 
                         second=starting_number_of_particles)
@@ -418,21 +425,21 @@ class Test(ut.TestCase):
         self.assertRaises(ValueError, pmb.create_molecule,
                         name="M3",
                         number_of_molecules=1,
-                        espresso_system=espresso_system,
+                        box_l=box_l,
                         use_default_bond=True)
         
         # Tests for delete_molecule
         # create another molecule just to have two molecules in the system
         pmb.create_molecule(name="M2",
                             number_of_molecules=1,
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             backbone_vector = backbone_vector,
                             use_default_bond=True)
         # This should delete 8 particles (molecule 0 is a M2 molecule)
+        pmb.add_instances_to_engine()
         starting_number_of_particles=len(espresso_system.part.all())
         pmb.delete_instances_in_system(instance_id=0,
-                                    pmb_type="molecule",
-                                    espresso_system=espresso_system)
+                                    pmb_type="molecule")
         self.assertEqual(first=len(espresso_system.part.all()), 
                         second=starting_number_of_particles-8)
         # There should only one molecule instance now in the pyMBE database

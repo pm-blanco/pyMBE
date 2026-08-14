@@ -26,8 +26,7 @@ import tqdm
 # Import pyMBE
 import pyMBE
 from pyMBE.lib import analysis
-from pyMBE.lib import handy_functions as hf
-from pyMBE.lib.handy_functions import do_reaction, define_peptide_AA_residues
+from pyMBE.lib.handy_functions import define_peptide_AA_residues
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
@@ -151,7 +150,8 @@ volume = N_peptide_chains/(pmb.N_A*pep_concentration)
 L = volume ** (1./3.) # Side of the simulation box
 
 # Create an instance of an espresso system
-espresso_system=espressomd.System (box_l = [L.to('reduced_length').magnitude]*3)
+box_l=[L.to('reduced_length').magnitude]*3
+espresso_system=espressomd.System (box_l = box_l)
 espresso_system.time_step=dt
 espresso_system.cell_system.skin=0.4
 
@@ -159,17 +159,21 @@ espresso_system.cell_system.skin=0.4
 # Create your molecules into the espresso system
 pmb.create_molecule(name=sequence,
                     number_of_molecules=N_peptide_chains,
-                    espresso_system=espresso_system)
+                    box_l=box_l)
 # Create counterions for the peptide chains
 pmb.create_counterions(object_name=sequence,
                     cation_name=cation_name,
                     anion_name=anion_name,
-                    espresso_system=espresso_system)
+                    box_l=box_l)
 
-c_salt_calculated = pmb.create_added_salt(espresso_system=espresso_system,
+c_salt_calculated = pmb.create_added_salt(
                      cation_name=cation_name,
                      anion_name=anion_name,
-                     c_salt=c_salt)
+                     c_salt=c_salt,
+                     box_l=box_l)
+
+pmb.set_simulation_engine(espresso_system)
+pmb.add_instances_to_engine()
 
 cpH = pmb.setup_cpH(counter_ion=cation_name,
                     constant_pH=pH)
@@ -190,18 +194,17 @@ if verbose:
     print(f"The non-interacting type is set to {non_interacting_type}")
 
 #Setup the potential energy
-pmb.setup_lj_interactions (espresso_system=espresso_system)
-hf.relax_espresso_system(espresso_system=espresso_system,
+pmb.setup_lj_interactions()
+pmb.simulation_engine.relax_espresso_system(
                           seed=langevin_seed)
-hf.setup_electrostatic_interactions(units=pmb.units,
-                                    espresso_system=espresso_system,
+pmb.simulation_engine.setup_electrostatic_interactions(units=pmb.units,
                                     kT=pmb.kT,
                                     verbose=verbose)
-hf.relax_espresso_system(espresso_system=espresso_system,
+pmb.simulation_engine.relax_espresso_system(
                           seed=langevin_seed)
 
 
-hf.setup_langevin_dynamics(espresso_system=espresso_system,
+pmb.simulation_engine.setup_langevin_dynamics(
                             kT = pmb.kT,
                             seed = langevin_seed,
                             time_step=dt,
@@ -221,9 +224,9 @@ for sample in tqdm.trange(Nsamples,disable=not verbose):
     # Run LD
     espresso_system.integrator.run(steps=MD_steps_per_sample)
     # Run MC
-    do_reaction(cpH, steps=len(sequence))
+    pmb.simulation_engine.do_reaction(cpH, steps=len(sequence))
     # Sample observables
-    charge_dict=pmb.calculate_net_charge(espresso_system=espresso_system,
+    charge_dict=pmb.calculate_net_charge(
                                         object_name=sequence,
                                         pmb_type="peptide",
                                         dimensionless=True)

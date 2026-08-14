@@ -53,6 +53,7 @@ class BondInstance(PMBBaseModel):
     name : str            # bond template name
     particle_id1: int
     particle_id2: int
+    added_to_engine: bool = False
 
     @validator("bond_id", "particle_id1", "particle_id2")
     def validate_non_negative_int(cls, value, field):

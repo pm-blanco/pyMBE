@@ -28,6 +28,10 @@ import pyMBE.lib.handy_functions as hf
 
 # Create an instance of pyMBE library
 pmb = pyMBE.pymbe_library(seed=42)
+Box_L = 100 * pmb.units.reduced_length
+box_l=[Box_L.to('reduced_length').magnitude] * 3
+espresso_system=espressomd.System(box_l = box_l)
+pmb.set_simulation_engine(espresso_system)
 protein_pdb = '1f6s'
 path_to_parfile = pathlib.Path(__file__).parent / "tests_data" / "protein_topology_dict.json"
 path_to_cg=pmb.root / "parameters" / "globular_proteins" / f"{protein_pdb}.vtf"
@@ -43,7 +47,6 @@ class Test(ut.TestCase):
         """
         Unit tests for setting up globular proteins in pyMBE.
         """
-        Box_L = 100 * pmb.units.reduced_length
         def custom_deserializer(dct):
             if "value" in dct and "unit" in dct:
                 return pmb.units.Quantity(dct["value"], dct["unit"])  
@@ -101,20 +104,19 @@ class Test(ut.TestCase):
         np.testing.assert_raises(ValueError, 
                                  pmb.define_protein, 
                                  **input_parameters)
-        espresso_system=espressomd.System(box_l = [Box_L.to('reduced_length').magnitude] * 3)
         with self.assertRaises(ValueError):
             pmb.create_protein(name="missing_protein_template",
                                number_of_proteins=1,
-                               espresso_system=espresso_system,
+                               box_l=box_l,
                                topology_dict=topology_dict)
         molecule_id = pmb.create_protein(name=protein_pdb,
                                         number_of_proteins=1,
-                                        espresso_system=espresso_system,
+                                        box_l=box_l,
                                         topology_dict=topology_dict)[0]
+        pmb.add_instances_to_engine()
         particle_id_list = pmb.get_particle_id_map(object_name=protein_pdb)["all"]
         center_of_mass_es = pmb.calculate_center_of_mass(instance_id=molecule_id,
-                                                        pmb_type="protein",
-                                                        espresso_system=espresso_system)
+                                                        pmb_type="protein")
         center_of_mass = np.zeros(3)
         axis_list = [0,1,2]
         for aminoacid in topology_dict.keys():
@@ -156,12 +158,13 @@ class Test(ut.TestCase):
         starting_number_of_particles=len(espresso_system.part.all())
         pmb.create_protein(name=protein_pdb,
                             number_of_proteins=0,
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             topology_dict=topology_dict)
         pmb.create_protein(name=protein_pdb,
                             number_of_proteins=-1,
-                            espresso_system=espresso_system,
+                            box_l=box_l,
                             topology_dict=topology_dict)
+        ### No particles instances are created, thus it is not needed to call add_instances_to_engine
         np.testing.assert_equal(actual=len(espresso_system.part.all()), 
                                 desired=starting_number_of_particles, 
                                 verbose=True)
@@ -169,13 +172,11 @@ class Test(ut.TestCase):
         for pid in particle_id_list:
             positions.append(espresso_system.part.by_id(pid).pos)
         pmb.enable_motion_of_rigid_object(instance_id=molecule_id,
-                                        espresso_system=espresso_system,
                                         pmb_type="protein")
 
         momI = 0
         center_of_mass = pmb.calculate_center_of_mass(instance_id=molecule_id, 
-                                                      pmb_type="protein", 
-                                                      espresso_system=espresso_system)
+                                                      pmb_type="protein")
         for p in espresso_system.part:
             if p.mass > 1: 
                 rigid_object_id = p.id 
