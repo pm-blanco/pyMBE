@@ -72,6 +72,7 @@ ideal=False
 if args.test:
     MD_steps_per_sample = 1
     ideal=True
+    N_samples = 2000 # improve sampling for testing
 
 # Peptide parameters
 sequence = args.sequence

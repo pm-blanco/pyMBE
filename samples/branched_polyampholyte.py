@@ -69,7 +69,8 @@ ideal=False
 if args.test:
     MD_steps_per_sample = 1
     ideal=True
-    N_polyampholyte_chains = 1 
+    N_samples = 2000 # improve the sampling for testing
+
 solvent_permitivity = 78.3
 N_polyampholyte_chains = 5
 polyampholyte_concentration = 5.56e-4 *pmb.units.mol/pmb.units.L
